@@ -1,0 +1,11 @@
+version: '3'
+
+dotenv: ['.env']
+
+tasks:
+  default:
+    cmds:
+      - GOMAXPROCS=1 go run .
+  single-test:
+    cmds:
+      - GOMAXPROCS=1 go test --count=1 -v . -run {{.CLI_ARGS}}
