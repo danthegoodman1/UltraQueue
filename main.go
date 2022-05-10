@@ -2,8 +2,10 @@ package main
 
 import (
 	"os"
+	"os/signal"
 	"path"
 	"runtime"
+	"syscall"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -23,6 +25,12 @@ func main() {
 	}
 
 	log.Info().Msg("Starting UltraQueue node")
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	<-c
+	log.Warn().Msg("Received shutdown signal!")
 
 }
 
