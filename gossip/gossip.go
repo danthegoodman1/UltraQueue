@@ -40,39 +40,6 @@ type update struct {
 	Data   map[string]string
 }
 
-// func init() {
-// 	flag.Parse()
-// }
-
-// func start() error {
-// 	hostname, _ := os.Hostname()
-// 	c := memberlist.DefaultLocalConfig()
-// 	c.Events = &eventDelegate{}
-// 	c.Delegate = &delegate{}
-// 	c.BindPort = 0
-// 	c.Name = hostname + "-" + nanoid.Must()
-// 	m, err := memberlist.Create(c)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if len(*members) > 0 {
-// 		parts := strings.Split(*members, ",")
-// 		_, err := m.Join(parts)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	broadcasts = &memberlist.TransmitLimitedQueue{
-// 		NumNodes: func() int {
-// 			return m.NumMembers()
-// 		},
-// 		RetransmitMult: 3,
-// 	}
-// 	node := m.LocalNode()
-// 	fmt.Printf("Local member %s:%d\n", node.Addr, node.Port)
-// 	return nil
-// }
-
 func NewGossipManager(partitionID, advertiseAddress string, port int, existingMembers []string) (gm *GossipManager, err error) {
 	myNode := &GossipNode{
 		NodeID:           partitionID,

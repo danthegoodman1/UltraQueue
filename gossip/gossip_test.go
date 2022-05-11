@@ -42,5 +42,5 @@ func TestGossipDualNode(t *testing.T) {
 	}
 	t.Log("Second node set")
 
-	time.Sleep(time.Second * 30)
+	time.Sleep(time.Second * 5)
 }
