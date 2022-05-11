@@ -3,6 +3,7 @@ package gossip
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -40,4 +41,6 @@ func TestGossipDualNode(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log("Second node set")
+
+	time.Sleep(time.Second * 30)
 }

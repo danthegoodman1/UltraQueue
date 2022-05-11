@@ -103,7 +103,9 @@ func NewGossipManager(partitionID, advertiseAddress string, port int, existingMe
 	config.Events = &eventDelegate{
 		NodeID: gm.NodeID,
 	}
-	config.Delegate = &delegate{}
+	config.Delegate = &delegate{
+		GossipManager: gm,
+	}
 	config.Name = partitionID
 
 	gm.MemberList, err = memberlist.Create(config)
@@ -122,6 +124,13 @@ func NewGossipManager(partitionID, advertiseAddress string, port int, existingMe
 		log.Info().Int("joinedHosts", joinedHosts).Msg("Successfully joined memberlist")
 	} else {
 		log.Info().Msg("Starting new memberlist cluster")
+	}
+
+	gm.broadcasts = &memberlist.TransmitLimitedQueue{
+		NumNodes: func() int {
+			return gm.MemberList.NumMembers()
+		},
+		RetransmitMult: 3,
 	}
 
 	node := gm.MemberList.LocalNode()

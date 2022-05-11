@@ -1,14 +1,21 @@
 package gossip
 
-import "encoding/json"
+import (
+	"encoding/json"
 
-type delegate struct{}
+	"github.com/rs/zerolog/log"
+)
+
+type delegate struct {
+	GossipManager *GossipManager
+}
 
 func (d *delegate) NodeMeta(limit int) []byte {
 	return []byte{}
 }
 
 func (d *delegate) NotifyMsg(b []byte) {
+	log.Debug().Str("nodeID", d.GossipManager.NodeID).Str("broadcast", string(b)).Msg("Got msg")
 	if len(b) == 0 {
 		return
 	}
@@ -35,7 +42,7 @@ func (d *delegate) NotifyMsg(b []byte) {
 }
 
 func (d *delegate) GetBroadcasts(overhead, limit int) [][]byte {
-	return broadcasts.GetBroadcasts(overhead, limit)
+	return d.GossipManager.broadcasts.GetBroadcasts(overhead, limit)
 }
 
 func (d *delegate) LocalState(join bool) []byte {
