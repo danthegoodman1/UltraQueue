@@ -9,3 +9,6 @@ tasks:
   single-test:
     cmds:
       - GOMAXPROCS=1 go test --count=1 -v . -run {{.CLI_ARGS}}
+  single-test-gossip:
+    cmds:
+      - GOMAXPROCS=1 go test --count=1 -v ./gossip -run {{.CLI_ARGS}}
