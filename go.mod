@@ -3,10 +3,12 @@ module github.com/danthegoodman1/UltraQueue
 go 1.18
 
 require (
+	github.com/davecgh/go-spew v1.1.1
 	github.com/google/btree v1.0.1
 	github.com/hashicorp/memberlist v0.3.1
 	github.com/prometheus/client_golang v1.12.1
 	github.com/rs/zerolog v1.26.1
+	github.com/vmihailenco/msgpack/v5 v5.3.5
 )
 
 require (
@@ -19,6 +21,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/miekg/dns v1.1.26 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e // indirect
 	golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d // indirect
 )

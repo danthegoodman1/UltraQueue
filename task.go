@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/btree"
 	nanoid "github.com/matoous/go-nanoid/v2"
 )
 
@@ -27,7 +26,7 @@ func NewTask(topic, partition string, payload []byte, priority int32, ttlSeconds
 
 	task := &Task{
 		Topic:            topic,
-		ID:               genTaskID(partition),
+		ID:               genRandomID(),
 		Payload:          payload,
 		ExpireAt:         now.Add(time.Second * time.Duration(ttlSeconds)),
 		CreatedAt:        now,
@@ -39,7 +38,8 @@ func NewTask(topic, partition string, payload []byte, priority int32, ttlSeconds
 	return task
 }
 
-func genTaskID(partition string) string {
+// The ID generated to route the ack/nack requests back to the partition
+func (task *Task) genExternalID(partition string) string {
 	// partition#id
 	return fmt.Sprintf("%s#%s", partition, genRandomID())
 }
@@ -57,10 +57,4 @@ func (task *Task) genTimeTreeID(delayTo time.Time) string {
 func (task *Task) genPriorityTreeID() string {
 	// Priority_TaskID
 	return fmt.Sprintf("%d_%s", task.Priority, task.ID)
-}
-
-// For the btree package
-func (this InTreeTask) Less(than btree.Item) bool {
-	temp, _ := than.(InTreeTask)
-	return this.TreeID < temp.TreeID
 }

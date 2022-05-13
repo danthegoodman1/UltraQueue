@@ -9,12 +9,14 @@ import (
 type Topic struct {
 	tree *btree.BTree
 	mu   *sync.Mutex
+	Name string
 }
 
 func NewTopic(topicName string) *Topic {
 	return &Topic{
 		tree: btree.New(3),
 		mu:   &sync.Mutex{},
+		Name: topicName,
 	}
 }
 
@@ -30,7 +32,7 @@ func (topic *Topic) Dequeue(numTasks int64) []*InTreeTask {
 
 func (topic *Topic) Enqueue(task *InTreeTask) {
 	topic.mu.Lock()
-	defer topic.mu.Lock()
+	defer topic.mu.Unlock()
 
 	topic.tree.ReplaceOrInsert(task)
 }
