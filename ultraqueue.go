@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -13,6 +14,8 @@ import (
 var (
 	// Will only process up to 10_000 items per tick to prevent massive stalls
 	DelayInFlightIteratorMaxItems = 10_000
+
+	ErrNotFoundInFlight = errors.New("task not found in flight")
 )
 
 type UltraQueue struct {
@@ -59,52 +62,50 @@ func (uq *UltraQueue) Shutdown() {
 	log.Info().Str("partition", uq.Partition).Msg("Shut down ultra queue")
 }
 
-func (uq *UltraQueue) Enqueue(topic string, payload []byte, priority int32, delaySeconds int64) {
-	task := NewTask(topic, uq.Partition, payload, priority, 0) // FIXME: TTL 0
+func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, delaySeconds int64) error {
+	for _, topicName := range topics {
+		task := NewTask(topicName, uq.Partition, payload, priority)
 
-	// TODO: Insert task into task DB task table
+		// TODO: Insert task into task DB task table
 
-	if delaySeconds > 0 {
-		uq.enqueueDelayedTask(task, delaySeconds)
-	} else {
-		uq.enqueueTask(task)
+		if delaySeconds > 0 {
+			uq.enqueueDelayedTask(task, delaySeconds)
+		} else {
+			uq.enqueueTask(task)
+		}
 	}
 
 	// TODO: Increment enqueue metric
-	return
+	return nil
 }
 
 func (uq *UltraQueue) Dequeue(topicName string, numTasks, inFlightTTLSeconds int) (tasks []*InTreeTask, err error) {
 	// Get numTasks from the topic
-	rawTasks, err := uq.dequeueTask(topicName, numTasks, inFlightTTLSeconds)
+	tasks, err = uq.dequeueTask(topicName, numTasks, inFlightTTLSeconds)
 	if err != nil {
 		log.Error().Err(err).Msg("Error dequeuing task")
 		return
-	}
-
-	// Prepend partition to task ID
-	for _, task := range rawTasks {
-		tasks = append(tasks, &InTreeTask{
-			TreeID: task.genExternalID(uq.Partition),
-			Task:   task,
-		})
 	}
 
 	// TODO: Increment dequeue metric
 	return
 }
 
-func (uq *UltraQueue) Ack(taskID, topicName string) (err error) {
+func (uq *UltraQueue) Ack(inFlightTaskID string) (err error) {
+	// TODO: delete task from DB
+	// TODO: delete task states from DB
+
 	// Check if in the in-flight tree
-	// delete task from DB
-	// delete task states from DB
-	if err != nil {
-		// TODO: Increment ack metric
+	deleted := uq.ack(inFlightTaskID)
+	if !deleted {
+		return ErrNotFoundInFlight
 	}
-	return
+
+	// TODO: Increment ack metric
+	return nil
 }
 
-func (uq *UltraQueue) Nack(taskID, topic string, delaySeconds int64) (err error) {
+func (uq *UltraQueue) Nack(topicName, taskID string, delaySeconds int64) (err error) {
 	// Check if in in-flight tree
 	// insert new task state into DB
 	if delaySeconds > 0 {
@@ -150,12 +151,15 @@ func (uq *UltraQueue) enqueueTask(task *Task) error {
 	return nil
 }
 
-func (uq *UltraQueue) dequeueTask(topicName string, numTasks, ttlSeconds int) (tasks []*Task, err error) {
+func (uq *UltraQueue) dequeueTask(topicName string, numTasks, inFlightTTLSeconds int) (tasks []*InTreeTask, err error) {
 	log.Debug().Str("partition", uq.Partition).Str("topic", topicName).Msg("Dequeueing topic")
 	// TODO: Add task state to DB
 
+	dequeueTime := time.Now()
+
 	topic := uq.getSafeTopic(topicName)
 	if topic == nil {
+		// TODO: Check if another partition has the topic, and get it
 		return nil, nil
 	}
 
@@ -164,10 +168,9 @@ func (uq *UltraQueue) dequeueTask(topicName string, numTasks, ttlSeconds int) (t
 
 	// Get tasks and add to inflight tree
 	inTreeTasks := topic.Dequeue(numTasks)
-	dequeueTime := time.Now()
 	for _, itt := range inTreeTasks {
-		tasks = append(tasks, itt.Task)
-		itt.TreeID = itt.Task.genTimeTreeID(dequeueTime.Add(time.Second * time.Duration(ttlSeconds)))
+		itt.TreeID = itt.Task.genExternalID(uq.Partition, dequeueTime.Add(time.Second*time.Duration(inFlightTTLSeconds)))
+		tasks = append(tasks, itt)
 		uq.inFlightTree.ReplaceOrInsert(itt)
 	}
 
@@ -282,4 +285,29 @@ func (uq *UltraQueue) expireInFlightTasks(t time.Time) {
 		uq.enqueueTask(itt.Task)
 	}
 	// TODO: Increment inflight ttl metric
+}
+
+// Removes from the in-flight tree, returns whether the task existed
+func (uq *UltraQueue) ack(inTreeTaskID string) bool {
+	uq.inFlightTreeMu.Lock()
+	defer uq.inFlightTreeMu.Unlock()
+
+	// shitty google btree needs the entire object for the delete, so we have to go FIND IT FIRST
+	var foundTask *InTreeTask
+	uq.inFlightTree.AscendGreaterOrEqual(&InTreeTask{
+		TreeID: inTreeTaskID,
+	}, func(i btree.Item) bool {
+		itt, _ := i.(*InTreeTask)
+		if itt.TreeID == inTreeTaskID {
+			foundTask = itt
+		}
+		// If we didn't find it as the first one, then we don't have it
+		return false
+	})
+	if foundTask != nil {
+		uq.inFlightTree.Delete(foundTask)
+		return true
+	} else {
+		return false
+	}
 }

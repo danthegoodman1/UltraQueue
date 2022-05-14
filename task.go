@@ -12,7 +12,6 @@ type Task struct {
 	Topic string
 
 	Payload   []byte
-	ExpireAt  time.Time
 	CreatedAt time.Time
 
 	Version          int64
@@ -21,14 +20,13 @@ type Task struct {
 	Priority int32
 }
 
-func NewTask(topic, partition string, payload []byte, priority int32, ttlSeconds int64) *Task {
+func NewTask(topic, partition string, payload []byte, priority int32) *Task {
 	now := time.Now()
 
 	task := &Task{
 		Topic:            topic,
 		ID:               genRandomID(),
 		Payload:          payload,
-		ExpireAt:         now.Add(time.Second * time.Duration(ttlSeconds)),
 		CreatedAt:        now,
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -39,13 +37,13 @@ func NewTask(topic, partition string, payload []byte, priority int32, ttlSeconds
 }
 
 // The ID generated to route the ack/nack requests back to the partition
-func (task *Task) genExternalID(partition string) string {
+func (task *Task) genExternalID(partition string, delayTo time.Time) string {
 	// partition#id
-	return fmt.Sprintf("%s#%s", partition, genRandomID())
+	return fmt.Sprintf("%d_%s_%s", delayTo.UnixMilli(), partition, task.ID)
 }
 
 func genRandomID() string {
-	return nanoid.MustGenerate("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", 16)
+	return nanoid.MustGenerate("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", 26)
 }
 
 func (task *Task) genTimeTreeID(delayTo time.Time) string {

@@ -15,7 +15,6 @@ func TestEnqueueDequeue(t *testing.T) {
 		ID:               "test_task",
 		Topic:            "test_topic",
 		Payload:          nil,
-		ExpireAt:         time.Now().Add(time.Second * 30),
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -47,7 +46,6 @@ func TestEnqueueDequeue(t *testing.T) {
 		ID:               "test_task-2",
 		Topic:            "test_topic",
 		Payload:          nil,
-		ExpireAt:         time.Now().Add(time.Second * 30),
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -61,7 +59,6 @@ func TestEnqueueDequeue(t *testing.T) {
 		ID:               "test_task-3",
 		Topic:            "test_topic",
 		Payload:          nil,
-		ExpireAt:         time.Now().Add(time.Second * 30),
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -84,7 +81,6 @@ func TestEnqueueDequeue(t *testing.T) {
 		ID:               "test_task-2",
 		Topic:            "test_topic",
 		Payload:          nil,
-		ExpireAt:         time.Now().Add(time.Second * 30),
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -98,7 +94,6 @@ func TestEnqueueDequeue(t *testing.T) {
 		ID:               "test_task-3",
 		Topic:            "test_topic",
 		Payload:          nil,
-		ExpireAt:         time.Now().Add(time.Second * 30),
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -132,7 +127,6 @@ func TestDelayedEnqueue(t *testing.T) {
 		ID:               "test_task",
 		Topic:            "test_topic",
 		Payload:          nil,
-		ExpireAt:         time.Now().Add(time.Second * 30),
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -184,5 +178,67 @@ func TestDelayedEnqueue(t *testing.T) {
 	t.Log(tasks)
 	if len(tasks) != 0 {
 		t.Fatal("Got a task when I shouldn't have")
+	}
+}
+
+func TestAck(t *testing.T) {
+	uq, err := NewUltraQueue("testpart", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = uq.Enqueue([]string{"topic1", "topic2"}, nil, 3, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tasks, err := uq.Dequeue("topic2", 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tasks) != 1 {
+		t.Fatal("Did not get a task")
+	}
+
+	tasks, err = uq.Dequeue("topic1", 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tasks) != 1 {
+		t.Fatal("Did not get a task")
+	}
+
+	t.Log("Acking", tasks[0].TreeID)
+	err = uq.Ack(tasks[0].TreeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Sleeping for 2s")
+	time.Sleep(time.Second * 2)
+	t.Log("Checking dequeue")
+
+	tasks, err = uq.Dequeue("topic1", 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tasks) != 0 {
+		t.Fatal("Task did not ack")
+	}
+
+	t.Log("Sleeping for 1s")
+	time.Sleep(time.Second * 1)
+	t.Log("Checking dequeue")
+
+	tasks, err = uq.Dequeue("topic2", 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tasks) != 1 {
+		t.Fatal("Task did not timeout for inflight")
 	}
 }
