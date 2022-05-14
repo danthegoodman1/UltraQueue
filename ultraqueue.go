@@ -202,7 +202,6 @@ func (uq *UltraQueue) pollDelayAndInFlightTrees(t *time.Ticker) {
 		select {
 		case tickTime := <-t.C:
 			// Poll each
-			log.Debug().Msg("Ticking delayed and expired...")
 			uq.expireDelayedTasks(tickTime)
 			uq.expireInFlightTasks(tickTime)
 		case returnChan := <-uq.closeChan:
