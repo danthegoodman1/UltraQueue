@@ -105,17 +105,15 @@ func (uq *UltraQueue) Ack(inFlightTaskID string) (err error) {
 	return nil
 }
 
-func (uq *UltraQueue) Nack(topicName, taskID string, delaySeconds int64) (err error) {
-	// Check if in in-flight tree
-	// insert new task state into DB
-	if delaySeconds > 0 {
-		// err = uq.enqueueDelayedTask(task)
-	} else {
-		// err = uq.enqueueTask(task)
+func (uq *UltraQueue) Nack(inFlightTaskID string, delaySeconds int) (err error) {
+	// TODO: insert new task state
+
+	nacked := uq.nack(inFlightTaskID, delaySeconds)
+	if !nacked {
+		return ErrNotFoundInFlight
 	}
-	if err != nil {
-		// TODO: Increment nack metric
-	}
+
+	// TODO: Increment nack metric
 	return
 }
 
@@ -306,6 +304,44 @@ func (uq *UltraQueue) ack(inTreeTaskID string) bool {
 	})
 	if foundTask != nil {
 		uq.inFlightTree.Delete(foundTask)
+		return true
+	} else {
+		return false
+	}
+}
+
+func (uq *UltraQueue) nack(inTreeTaskID string, delayTimeSeconds int) bool {
+	uq.inFlightTreeMu.Lock()
+	defer uq.inFlightTreeMu.Unlock()
+
+	// shitty google btree needs the entire object for the delete, so we have to go FIND IT FIRST
+	var foundTask *InTreeTask
+	uq.inFlightTree.AscendGreaterOrEqual(&InTreeTask{
+		TreeID: inTreeTaskID,
+	}, func(i btree.Item) bool {
+		itt, _ := i.(*InTreeTask)
+		if itt.TreeID == inTreeTaskID {
+			foundTask = itt
+		}
+		// If we didn't find it as the first one, then we don't have it
+		return false
+	})
+	if foundTask != nil {
+		uq.inFlightTree.Delete(foundTask)
+		if delayTimeSeconds > 0 {
+			// Put in delay tree
+			uq.delayTreeMu.Lock()
+			defer uq.delayTreeMu.Unlock()
+			uq.delayTree.ReplaceOrInsert(foundTask)
+		} else {
+			// Put in topic
+			topic := uq.getSafeTopic(foundTask.Task.Topic)
+			if topic == nil {
+				// Create if it doesn't exist
+				topic = uq.putSafeTopic(foundTask.Task.Topic)
+			}
+			topic.Enqueue(NewInTreeTask(foundTask.Task.genPriorityTreeID(), foundTask.Task))
+		}
 		return true
 	} else {
 		return false

@@ -242,3 +242,73 @@ func TestAck(t *testing.T) {
 		t.Fatal("Task did not timeout for inflight")
 	}
 }
+
+func TestNack(t *testing.T) {
+	uq, err := NewUltraQueue("testpart", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = uq.Enqueue([]string{"topic1", "topic2"}, nil, 3, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tasks, err := uq.Dequeue("topic2", 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tasks) != 1 {
+		t.Fatal("Did not get a task")
+	}
+
+	t.Log("Nacking", tasks[0].TreeID)
+	err = uq.Nack(tasks[0].TreeID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should be immediately available again
+	newTasks, err := uq.Dequeue("topic2", 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if newTasks[0].Task.ID != tasks[0].Task.ID {
+		t.Fatal("Did not get task immediately after dequeue")
+	}
+
+	// Test nack with delay
+	tasks, err = uq.Dequeue("topic1", 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = uq.Nack(tasks[0].TreeID, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tasks, err = uq.Dequeue("topic1", 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tasks) != 0 {
+		t.Fatal("Nack did not delay")
+	}
+
+	t.Log("Sleeping for 3s")
+	time.Sleep(time.Second * 3)
+	t.Log("Checking dequeue")
+
+	tasks, err = uq.Dequeue("topic1", 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tasks) != 1 {
+		t.Fatal("Task not found after delay")
+	}
+}
