@@ -136,4 +136,11 @@ func TestDelayedEnqueue(t *testing.T) {
 	if len(tasks) != 1 {
 		t.Fatal("Got no tasks when I should have")
 	}
+
+	// Should be empty
+	tasks = uq.dequeueTask("test_topic", 1, 10)
+	t.Log(tasks)
+	if len(tasks) != 0 {
+		t.Fatal("Got a task when I shouldn't have")
+	}
 }
