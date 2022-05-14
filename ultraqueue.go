@@ -6,14 +6,16 @@ import (
 
 	"github.com/danthegoodman1/UltraQueue/taskdb"
 	"github.com/google/btree"
+	"github.com/rs/zerolog/log"
 )
 
 type UltraQueue struct {
 	Partition string
 
-	TaskDB *taskdb.TaskDB
+	TaskDB  *taskdb.TaskDB
+	topics  map[string]*Topic
+	topicMu *sync.RWMutex
 
-	topicLengths   map[string]int64
 	inFlightTree   *btree.BTree
 	inFlightTreeMu *sync.Mutex
 	delayTree      *btree.BTree
@@ -33,7 +35,8 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 		delayTreeMu:    &sync.Mutex{},
 		inFlightTicker: time.NewTicker(time.Millisecond * 5),
 		closeChan:      make(chan struct{}),
-		topicLengths:   make(map[string]int64),
+		topics:         make(map[string]*Topic),
+		topicMu:        &sync.RWMutex{},
 	}
 
 	return uq, nil
@@ -65,6 +68,7 @@ func (uq *UltraQueue) Dequeue(topic string, numTasks, ttlSeconds int64) (tasks [
 	// Increment delivery attempts
 	// Insert in-flight task state in DB
 	// Add to in-flight tree
+	// Give partition prepended ID
 	// TODO: Increment dequeue metric
 	return
 }
@@ -107,10 +111,78 @@ func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int64) error {
 }
 
 func (uq *UltraQueue) enqueueTask(task *Task) error {
+	log.Debug().Str("partition", uq.Partition).Str("topic", task.Topic).Msg("Enqueuing topic")
 	// TODO: Add task state to DB
 
 	// Add to topic outbox tree
-	// treeID := task.genPriorityTreeID()
+	topic := uq.getSafeTopic(task.Topic)
+	if topic == nil {
+		topic = uq.putSafeTopic(task.Topic)
+	}
+
+	treeID := task.genPriorityTreeID()
+	topic.Enqueue(&InTreeTask{
+		TreeID: treeID,
+		Task:   task,
+	})
 
 	return nil
+}
+
+func (uq *UltraQueue) dequeueTask(topicName string, numTasks, ttlSeconds int) (tasks []*Task) {
+	log.Debug().Str("partition", uq.Partition).Str("topic", topicName).Msg("Dequeueing topic")
+
+	topic := uq.getSafeTopic(topicName)
+	if topic == nil {
+		return nil
+	}
+
+	uq.inFlightTreeMu.Lock()
+	defer uq.inFlightTreeMu.Unlock()
+
+	// Get tasks and add to inflight tree
+	inTreeTasks := topic.Dequeue(numTasks)
+	dequeueTime := time.Now()
+	for _, itt := range inTreeTasks {
+		tasks = append(tasks, itt.Task)
+		itt.TreeID = itt.Task.genTimeTreeID(dequeueTime.Add(time.Second * time.Duration(ttlSeconds)))
+		uq.inFlightTree.ReplaceOrInsert(itt)
+	}
+
+	return
+}
+
+// Safely gets a topic respecting read lock
+func (uq *UltraQueue) getSafeTopic(topicName string) *Topic {
+	uq.topicMu.RLock()
+	defer uq.topicMu.RUnlock()
+
+	if topic, exists := uq.topics[topicName]; exists {
+		return topic
+	}
+	return nil
+}
+
+// Creates or overwrites a topic
+func (uq *UltraQueue) putSafeTopic(topicName string) *Topic {
+	uq.topicMu.Lock()
+	defer uq.topicMu.Unlock()
+
+	topic := NewTopic(topicName)
+	uq.topics[topicName] = topic
+	return topic
+}
+
+func (uq *UltraQueue) getTopicLengths() map[string]int {
+	uq.topicMu.RLock()
+	defer uq.topicMu.RUnlock()
+
+	topicLengths := make(map[string]int)
+
+	// Iterate over all of the topics and get their current lengths, non-sync read is ok
+	for _, topic := range uq.topics {
+		topicLengths[topic.Name] = topic.tree.Len()
+	}
+
+	return topicLengths
 }
