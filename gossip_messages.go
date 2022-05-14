@@ -16,3 +16,15 @@ func NewPartitionTopicLengthUpdate(topic, partition string, length int) *Partiti
 		Type:      "ptlu",
 	}
 }
+
+type PartitionAddressAdvertise struct {
+	Partition string
+	Address   string
+}
+
+func NewPartitionAddressAdvertise(partition, address string) *PartitionAddressAdvertise {
+	return &PartitionAddressAdvertise{
+		Partition: partition,
+		Address:   address,
+	}
+}
