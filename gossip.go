@@ -43,11 +43,6 @@ type GossipNode struct {
 	LastUpdated      time.Time
 }
 
-type update struct {
-	Action string // add, del
-	Data   map[string]string
-}
-
 func NewGossipManager(partitionID, advertiseAddress string, uq *UltraQueue, port int, existingMembers []string) (gm *GossipManager, err error) {
 	myNode := &GossipNode{
 		NodeID:           partitionID,
@@ -125,7 +120,7 @@ func (gm *GossipManager) pollTopicLen(t time.Ticker) {
 	for {
 		select {
 		case <-t.C:
-			log.Debug().Str("partition", gm.UltraQ.Partition).Msg("Polling for changed topic lengths...")
+			// log.Debug().Str("partition", gm.UltraQ.Partition).Msg("Polling for changed topic lengths...")
 			// poll topic lengths and add operations to queue
 			topicLengths := gm.UltraQ.getTopicLengths()
 			for topicName, length := range topicLengths {
@@ -172,9 +167,15 @@ func (gm *GossipManager) putIndexRemotePartitionTopicLength(partition, topicName
 		// TODO: Remove log line
 		log.Debug().Str("partition", gm.UltraQ.Partition).Str("remote partition", partition).Str("topic", topicName).Int("topicLen", length).Msg("Updating existing local remote partition topic length")
 		// Less operations to just set rather than read then set if not the same
-		partitionLengthMap[partition] = length
-	} else {
-		// Create it
+		if length == 0 {
+			// Remove
+			delete(partitionLengthMap, partition)
+		} else {
+			// Update
+			partitionLengthMap[partition] = length
+		}
+	} else if length != 0 {
+		// Create it, only if not zero in case we get weird our of order gossip
 		// TODO: Remove log line
 		log.Debug().Str("partition", gm.UltraQ.Partition).Str("remote partition", partition).Str("topic", topicName).Int("topicLen", length).Msg("Set local remote partition topic length")
 		gm.RemotePartitionTopicIndex[topicName] = map[string]int{

@@ -68,6 +68,7 @@ func (uq *UltraQueue) Dequeue(topic string, numTasks, ttlSeconds int64) (tasks [
 	// Increment delivery attempts
 	// Insert in-flight task state in DB
 	// Add to in-flight tree
+	// Give partition prepended ID
 	// TODO: Increment dequeue metric
 	return
 }
@@ -110,7 +111,7 @@ func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int64) error {
 }
 
 func (uq *UltraQueue) enqueueTask(task *Task) error {
-	log.Debug().Str("partition", uq.Partition).Msg("Enqueuing topic")
+	log.Debug().Str("partition", uq.Partition).Str("topic", task.Topic).Msg("Enqueuing topic")
 	// TODO: Add task state to DB
 
 	// Add to topic outbox tree
@@ -126,6 +127,29 @@ func (uq *UltraQueue) enqueueTask(task *Task) error {
 	})
 
 	return nil
+}
+
+func (uq *UltraQueue) dequeueTask(topicName string, numTasks, ttlSeconds int) (tasks []*Task) {
+	log.Debug().Str("partition", uq.Partition).Str("topic", topicName).Msg("Dequeueing topic")
+
+	topic := uq.getSafeTopic(topicName)
+	if topic == nil {
+		return nil
+	}
+
+	uq.inFlightTreeMu.Lock()
+	defer uq.inFlightTreeMu.Unlock()
+
+	// Get tasks and add to inflight tree
+	inTreeTasks := topic.Dequeue(numTasks)
+	dequeueTime := time.Now()
+	for _, itt := range inTreeTasks {
+		tasks = append(tasks, itt.Task)
+		itt.TreeID = itt.Task.genTimeTreeID(dequeueTime.Add(time.Second * time.Duration(ttlSeconds)))
+		uq.inFlightTree.ReplaceOrInsert(itt)
+	}
+
+	return
 }
 
 // Safely gets a topic respecting read lock

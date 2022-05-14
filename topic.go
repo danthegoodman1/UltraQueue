@@ -21,13 +21,27 @@ func NewTopic(topicName string) *Topic {
 }
 
 // Retrieves up to numTasks tasks
-func (topic *Topic) Dequeue(numTasks int64) []*InTreeTask {
-	items := make([]*InTreeTask, 0)
+func (topic *Topic) Dequeue(numTasks int) []*InTreeTask {
+	tasks := make([]*InTreeTask, 0)
 
 	topic.mu.Lock()
 	defer topic.mu.Unlock()
-	// TODO: Iterate and delete greatest numTasks items, or until the end
-	return items
+	count := 0
+	topic.tree.Descend(func(i btree.Item) bool {
+		itt, _ := i.(*InTreeTask)
+		tasks = append(tasks, itt)
+
+		// Keep track of how many we have done, exit when needed
+		count++
+		return count <= numTasks
+	})
+
+	// Delete all of the in tree tasks from the tree
+	for _, itt := range tasks {
+		topic.tree.Delete(itt)
+	}
+
+	return tasks
 }
 
 func (topic *Topic) Enqueue(task *InTreeTask) {
