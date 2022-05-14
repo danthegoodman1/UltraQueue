@@ -33,7 +33,7 @@ func (topic *Topic) Dequeue(numTasks int) []*InTreeTask {
 
 		// Keep track of how many we have done, exit when needed
 		count++
-		return count <= numTasks
+		return count < numTasks
 	})
 
 	// Delete all of the in tree tasks from the tree

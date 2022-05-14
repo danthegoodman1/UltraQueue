@@ -63,6 +63,15 @@ func TestGossipDualNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	time.Sleep(time.Second)
+	t.Log("Dequeueing item")
+	gm.UltraQ.dequeueTask("test_topic", 1, 100)
+
+	time.Sleep(time.Second)
+	t.Log("Dequeueing item")
+	gm.UltraQ.dequeueTask("test_topic", 1, 100)
+
 	time.Sleep(time.Second * 5)
 	t.Log("Shutting down")
 	gm.Shutdown()

@@ -168,6 +168,8 @@ func (gm *GossipManager) putIndexRemotePartitionTopicLength(partition, topicName
 		log.Debug().Str("partition", gm.UltraQ.Partition).Str("remote partition", partition).Str("topic", topicName).Int("topicLen", length).Msg("Updating existing local remote partition topic length")
 		// Less operations to just set rather than read then set if not the same
 		if length == 0 {
+			// TODO: Remove log line
+			log.Debug().Str("partition", gm.UltraQ.Partition).Str("remote partition", partition).Str("topic", topicName).Int("topicLen", length).Msg("Removing topic length of 0")
 			// Remove
 			delete(partitionLengthMap, partition)
 		} else {

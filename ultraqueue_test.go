@@ -70,4 +70,38 @@ func TestEnqueueDequeue(t *testing.T) {
 	if len(tasks) != 2 {
 		t.Fatal("Missing tasks from test_topic")
 	}
+
+	err = uq.enqueueTask(&Task{
+		ID:               "test_task-2",
+		Topic:            "test_topic",
+		Payload:          nil,
+		ExpireAt:         time.Now().Add(time.Second * 30),
+		CreatedAt:        time.Now(),
+		Version:          1,
+		DeliveryAttempts: 0,
+		Priority:         4,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = uq.enqueueTask(&Task{
+		ID:               "test_task-3",
+		Topic:            "test_topic",
+		Payload:          nil,
+		ExpireAt:         time.Now().Add(time.Second * 30),
+		CreatedAt:        time.Now(),
+		Version:          1,
+		DeliveryAttempts: 0,
+		Priority:         4,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Only pull 1 task
+	tasks = uq.dequeueTask("test_topic", 1, 10)
+	if len(tasks) != 1 {
+		t.Fatal("Too many tasks from test_topic")
+	}
 }
