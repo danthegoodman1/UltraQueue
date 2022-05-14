@@ -20,7 +20,7 @@ func NewTopic(topicName string) *Topic {
 	}
 }
 
-// Retrieves up to numTasks tasks
+// Retrieves up to numTasks tasks in priority order
 func (topic *Topic) Dequeue(numTasks int) []*InTreeTask {
 	tasks := make([]*InTreeTask, 0)
 

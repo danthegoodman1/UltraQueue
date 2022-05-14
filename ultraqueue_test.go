@@ -110,7 +110,7 @@ func TestDelayedEnqueue(t *testing.T) {
 		Version:          1,
 		DeliveryAttempts: 0,
 		Priority:         4,
-	}, 1)
+	}, 5)
 
 	// Should not be ready yet
 	tasks := uq.dequeueTask("test_topic", 1, 10)
@@ -120,6 +120,15 @@ func TestDelayedEnqueue(t *testing.T) {
 	}
 
 	time.Sleep(time.Millisecond * 1500)
+
+	// Should not be ready yet
+	tasks = uq.dequeueTask("test_topic", 1, 10)
+	t.Log(tasks)
+	if len(tasks) != 0 {
+		t.Fatal("Got a task when I should not have")
+	}
+
+	time.Sleep(time.Millisecond * 3500)
 
 	// Should be ready now
 	tasks = uq.dequeueTask("test_topic", 1, 10)

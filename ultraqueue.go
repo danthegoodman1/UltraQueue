@@ -74,7 +74,7 @@ func (uq *UltraQueue) Enqueue(topic string, payload []byte, priority int32, dela
 	return
 }
 
-func (uq *UltraQueue) Dequeue(topic string, numTasks, ttlSeconds int64) (tasks []*InTreeTask, err error) {
+func (uq *UltraQueue) Dequeue(topic string, numTasks, inFlightTTLSeconds int64) (tasks []*InTreeTask, err error) {
 	// Get numTasks from the topic
 	// Increment delivery attempts
 	// Insert in-flight task state in DB
@@ -223,7 +223,7 @@ func (uq *UltraQueue) expireDelayedTasks(t time.Time) {
 	treeID := fmt.Sprintf("%d", t.UnixMilli())
 
 	count := 0
-	uq.delayTree.DescendGreaterThan(&InTreeTask{
+	uq.delayTree.AscendLessThan(&InTreeTask{
 		TreeID: treeID,
 	}, func(i btree.Item) bool {
 		itt, _ := i.(*InTreeTask)
@@ -252,7 +252,7 @@ func (uq *UltraQueue) expireInFlightTasks(t time.Time) {
 	treeID := fmt.Sprintf("%d", t.UnixMilli())
 
 	count := 0
-	uq.inFlightTree.DescendGreaterThan(&InTreeTask{
+	uq.inFlightTree.AscendLessThan(&InTreeTask{
 		TreeID: treeID,
 	}, func(i btree.Item) bool {
 		itt, _ := i.(*InTreeTask)
