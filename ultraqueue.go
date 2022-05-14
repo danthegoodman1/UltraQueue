@@ -62,7 +62,7 @@ func (uq *UltraQueue) Shutdown() {
 func (uq *UltraQueue) Enqueue(topic string, payload []byte, priority int32, delaySeconds int64) {
 	task := NewTask(topic, uq.Partition, payload, priority, 0) // FIXME: TTL 0
 
-	// TODO: Insert task into DB first
+	// TODO: Insert task into task DB task table
 
 	if delaySeconds > 0 {
 		uq.enqueueDelayedTask(task, delaySeconds)
@@ -74,17 +74,27 @@ func (uq *UltraQueue) Enqueue(topic string, payload []byte, priority int32, dela
 	return
 }
 
-func (uq *UltraQueue) Dequeue(topic string, numTasks, inFlightTTLSeconds int64) (tasks []*InTreeTask, err error) {
+func (uq *UltraQueue) Dequeue(topicName string, numTasks, inFlightTTLSeconds int) (tasks []*InTreeTask, err error) {
 	// Get numTasks from the topic
-	// Increment delivery attempts
-	// Insert in-flight task state in DB
-	// Add to in-flight tree
-	// Give partition prepended ID
+	rawTasks, err := uq.dequeueTask(topicName, numTasks, inFlightTTLSeconds)
+	if err != nil {
+		log.Error().Err(err).Msg("Error dequeuing task")
+		return
+	}
+
+	// Prepend partition to task ID
+	for _, task := range rawTasks {
+		tasks = append(tasks, &InTreeTask{
+			TreeID: task.genExternalID(uq.Partition),
+			Task:   task,
+		})
+	}
+
 	// TODO: Increment dequeue metric
 	return
 }
 
-func (uq *UltraQueue) Ack(taskID, topic string) (err error) {
+func (uq *UltraQueue) Ack(taskID, topicName string) (err error) {
 	// Check if in the in-flight tree
 	// delete task from DB
 	// delete task states from DB
@@ -121,7 +131,7 @@ func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int64) error {
 	return nil
 }
 
-func (uq *UltraQueue) enqueueTask(task *Task) {
+func (uq *UltraQueue) enqueueTask(task *Task) error {
 	log.Debug().Str("partition", uq.Partition).Str("topic", task.Topic).Msg("Enqueuing topic")
 	// TODO: Add task state to DB
 
@@ -136,14 +146,17 @@ func (uq *UltraQueue) enqueueTask(task *Task) {
 		TreeID: treeID,
 		Task:   task,
 	})
+
+	return nil
 }
 
-func (uq *UltraQueue) dequeueTask(topicName string, numTasks, ttlSeconds int) (tasks []*Task) {
+func (uq *UltraQueue) dequeueTask(topicName string, numTasks, ttlSeconds int) (tasks []*Task, err error) {
 	log.Debug().Str("partition", uq.Partition).Str("topic", topicName).Msg("Dequeueing topic")
+	// TODO: Add task state to DB
 
 	topic := uq.getSafeTopic(topicName)
 	if topic == nil {
-		return nil
+		return nil, nil
 	}
 
 	uq.inFlightTreeMu.Lock()
