@@ -3,8 +3,8 @@ package taskdb
 import "time"
 
 type TaskDB interface {
-	// Returns a channel that will be written to when the TaskDB is ready, and the UltraQueue should start accepting requests
-	Attach() (chan struct{}, error)
+	// Acquires the TaskDB lock as needed, then returns an AttachIterator
+	Attach() (AttachIterator, error)
 
 	// A Task will be inserted into the task table, and its first state inserted
 	Enqueue(state *TaskDBTaskState, payload []byte) error
@@ -19,7 +19,7 @@ type TaskDB interface {
 	Delete(topicName, taskID string) error
 
 	// Returns an interator that will read all payloads from the DB, so they can be drained into other partitions
-	Drain()
+	Drain() (DrainIterator, error)
 }
 
 type TaskDBTaskState struct {
@@ -45,4 +45,20 @@ func NewTaskDBTaskState(partition, topicName, taskID string, state TaskState, ve
 		Priority:         priority,
 		CreatedAt:        createdAt,
 	}
+}
+
+type AttachIterator interface {
+	// Returns an array of task states. Returns nil when there are no more
+	Next() ([]*TaskDBTaskState, error)
+}
+
+type DrainTask struct {
+	Topic   string
+	ID      string
+	Payload []byte
+}
+
+type DrainIterator interface {
+	// Returns an array of task payloads that can be joined to their current states, and sent to other partitions. Returns nil when there are no more
+	Next() ([]*DrainTask, error)
 }
