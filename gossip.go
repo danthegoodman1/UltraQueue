@@ -111,12 +111,12 @@ func NewGossipManager(partitionID, advertiseAddress string, uq *UltraQueue, port
 	node := gm.MemberList.LocalNode()
 	log.Info().Str("name", node.Name).Str("addr", node.Address()).Int("port", int(node.Port)).Msg("Node started")
 
-	go gm.pollTopicLen(*time.NewTicker(time.Millisecond * 500))
+	go gm.pollTopicLen(time.NewTicker(time.Millisecond * 500))
 
 	return gm, nil
 }
 
-func (gm *GossipManager) pollTopicLen(t time.Ticker) {
+func (gm *GossipManager) pollTopicLen(t *time.Ticker) {
 	for {
 		select {
 		case <-t.C:

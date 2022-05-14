@@ -34,7 +34,7 @@ func TestGossipDualNode(t *testing.T) {
 
 	time.Sleep(time.Second * 10)
 	t.Log("Directly enqueuing item")
-	err = gm.UltraQ.enqueueTask(&Task{
+	gm.UltraQ.enqueueTask(&Task{
 		ID:               "test_task",
 		Topic:            "test_topic",
 		Payload:          nil,
@@ -44,13 +44,10 @@ func TestGossipDualNode(t *testing.T) {
 		DeliveryAttempts: 0,
 		Priority:         4,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	time.Sleep(time.Second * 3)
 	t.Log("Directly enqueuing item")
-	err = gm.UltraQ.enqueueTask(&Task{
+	gm.UltraQ.enqueueTask(&Task{
 		ID:               "test_task2",
 		Topic:            "test_topic",
 		Payload:          nil,
@@ -60,9 +57,6 @@ func TestGossipDualNode(t *testing.T) {
 		DeliveryAttempts: 0,
 		Priority:         4,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	time.Sleep(time.Second)
 	t.Log("Dequeueing item")
