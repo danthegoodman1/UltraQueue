@@ -22,6 +22,7 @@ type PartitionAddressAdvertise struct {
 	Address   string
 }
 
+// On new node join event, we advertise our address and port
 func NewPartitionAddressAdvertise(partition, address string) *PartitionAddressAdvertise {
 	return &PartitionAddressAdvertise{
 		Partition: partition,
