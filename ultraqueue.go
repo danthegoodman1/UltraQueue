@@ -38,9 +38,9 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 
 	uq := &UltraQueue{
 		Partition:      partition,
-		inFlightTree:   btree.New(3),
+		inFlightTree:   btree.New(32),
 		inFlightTreeMu: &sync.Mutex{},
-		delayTree:      btree.New(3),
+		delayTree:      btree.New(32),
 		delayTreeMu:    &sync.Mutex{},
 		inFlightTicker: time.NewTicker(time.Millisecond * 5),
 		closeChan:      make(chan chan struct{}),

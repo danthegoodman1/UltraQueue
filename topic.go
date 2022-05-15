@@ -14,7 +14,7 @@ type Topic struct {
 
 func NewTopic(topicName string) *Topic {
 	return &Topic{
-		tree: btree.New(3),
+		tree: btree.New(32),
 		mu:   &sync.Mutex{},
 		Name: topicName,
 	}
