@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
@@ -35,7 +36,7 @@ func (d *delegate) NotifyMsg(b []byte) {
 		return
 	}
 
-	// TODO: Handle duplicate messages from gossip so we don't triple process them
+	// TODO: Handle duplicate messages from gossip so we don't triple process them?
 	switch msgTypeStr {
 	case "ptlu":
 		var ptlu *PartitionTopicLengthUpdate
@@ -47,6 +48,29 @@ func (d *delegate) NotifyMsg(b []byte) {
 		// TODO: Remove log line
 		log.Debug().Str("partition", d.GossipManager.UltraQ.Partition).Interface("ptlu", ptlu).Msg("unpacked partition topic length update")
 		go d.GossipManager.putIndexRemotePartitionTopicLength(ptlu.Partition, ptlu.Topic, ptlu.Length)
+
+	case "paa":
+		var paa *PartitionAddressAdvertise
+		err := msgpack.Unmarshal(b, &paa)
+		if err != nil {
+			log.Error().Err(err).Str("partition", d.GossipManager.UltraQ.Partition).Msg("failed to unmarshal msgpack")
+			return
+		}
+		// TODO: Remove log line
+		log.Debug().Str("partition", d.GossipManager.UltraQ.Partition).Interface("paa", paa).Msg("unpacked partition advertise address message")
+		if paa.Partition == d.GossipManager.UltraQ.Partition {
+			log.Warn().Str("partition", d.GossipManager.UltraQ.Partition).Msg("Got paa for self, ignoring")
+			return
+		}
+		d.GossipManager.PartitionIndexMu.Lock()
+		defer d.GossipManager.PartitionIndexMu.Unlock()
+		d.GossipManager.PartitionIndex[paa.Partition] = &GossipNode{
+			NodeID:           paa.Partition,
+			AdvertiseAddress: paa.Address,
+			AdvertisePort:    paa.Port,
+			LastUpdated:      time.Now(),
+		}
+
 	default:
 		log.Error().Err(err).Str("partition", d.GossipManager.UltraQ.Partition).Str("msgType", msgTypeStr).Msg("unknown message type")
 		return
