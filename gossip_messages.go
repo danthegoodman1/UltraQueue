@@ -20,12 +20,17 @@ func NewPartitionTopicLengthUpdate(topic, partition string, length int) *Partiti
 type PartitionAddressAdvertise struct {
 	Partition string
 	Address   string
+	Port      string
+
+	Type string
 }
 
 // On new node join event, we advertise our address and port
-func NewPartitionAddressAdvertise(partition, address string) *PartitionAddressAdvertise {
+func NewPartitionAddressAdvertise(partition, address, port string) *PartitionAddressAdvertise {
 	return &PartitionAddressAdvertise{
 		Partition: partition,
 		Address:   address,
+		Port:      port,
+		Type:      "paa",
 	}
 }

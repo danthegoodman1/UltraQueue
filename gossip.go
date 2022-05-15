@@ -17,13 +17,17 @@ var (
 )
 
 type GossipManager struct {
+	// The partition ID
 	NodeID string
+	Node   *GossipNode
 
 	MemberList *memberlist.Memberlist
 
 	// Mapping of partition
-	PartitionIndex map[string]*GossipNode
-	broadcasts     *memberlist.TransmitLimitedQueue
+	PartitionIndex   map[string]*GossipNode
+	PartitionIndexMu *sync.RWMutex
+
+	broadcasts *memberlist.TransmitLimitedQueue
 
 	UltraQ *UltraQueue
 
@@ -38,23 +42,26 @@ type GossipManager struct {
 }
 
 type GossipNode struct {
+	// The partition ID
 	NodeID           string
 	AdvertiseAddress string
+	AdvertisePort    string
 	LastUpdated      time.Time
 }
 
-func NewGossipManager(partitionID, advertiseAddress string, uq *UltraQueue, port int, existingMembers []string) (gm *GossipManager, err error) {
+func NewGossipManager(partitionID, gossipAddress string, uq *UltraQueue, gossipPort int, advertiseAddress, advertisePort string, existingMembers []string) (gm *GossipManager, err error) {
 	myNode := &GossipNode{
 		NodeID:           partitionID,
 		AdvertiseAddress: advertiseAddress,
+		AdvertisePort:    advertisePort,
 		LastUpdated:      time.Now(),
 	}
 
 	gm = &GossipManager{
-		NodeID: partitionID,
-		PartitionIndex: map[string]*GossipNode{
-			partitionID: myNode,
-		},
+		NodeID:                      partitionID,
+		Node:                        myNode,
+		PartitionIndex:              make(map[string]*GossipNode),
+		PartitionIndexMu:            &sync.RWMutex{},
 		UltraQ:                      uq,
 		topicPollStopChan:           make(chan chan struct{}, 1),
 		topicLenCache:               make(map[string]int),
@@ -74,9 +81,9 @@ func NewGossipManager(partitionID, advertiseAddress string, uq *UltraQueue, port
 		}
 	}
 
-	config.BindPort = port
+	config.BindPort = gossipPort
 	config.Events = &eventDelegate{
-		NodeID: gm.NodeID,
+		gm: gm,
 	}
 	config.Delegate = &delegate{
 		GossipManager: gm,
@@ -112,6 +119,8 @@ func NewGossipManager(partitionID, advertiseAddress string, uq *UltraQueue, port
 	log.Info().Str("name", node.Name).Str("addr", node.Address()).Int("port", int(node.Port)).Msg("Node started")
 
 	go gm.pollTopicLen(time.NewTicker(time.Millisecond * 500))
+
+	gm.broadcastAdvertiseAddress()
 
 	return gm, nil
 }
@@ -154,6 +163,10 @@ func (gm *GossipManager) Shutdown() {
 	log.Info().Str("partition", gm.UltraQ.Partition).Msg("Shutting down gossip manager...")
 	returnChan := make(chan struct{}, 1)
 	gm.topicPollStopChan <- returnChan
+	log.Debug().Str("partition", gm.UltraQ.Partition).Msg("Leaving cluster...")
+	gm.MemberList.Leave(time.Second * 10)
+	log.Debug().Str("partition", gm.UltraQ.Partition).Msg("Shutting down...")
+	gm.MemberList.Shutdown()
 	<-returnChan
 	log.Info().Str("partition", gm.UltraQ.Partition).Msg("Shut down gossip manager")
 }
@@ -183,5 +196,35 @@ func (gm *GossipManager) putIndexRemotePartitionTopicLength(partition, topicName
 		gm.RemotePartitionTopicIndex[topicName] = map[string]int{
 			partition: length,
 		}
+	}
+}
+
+func (gm *GossipManager) broadcastAdvertiseAddress() {
+	msg := NewPartitionAddressAdvertise(gm.UltraQ.Partition, gm.Node.AdvertiseAddress, gm.Node.AdvertisePort)
+	b, err := msgpack.Marshal(msg)
+	if err != nil {
+		log.Error().Err(err).Msg("Error marshalling partition address advertise")
+		return
+	}
+	gm.broadcasts.QueueBroadcast(&broadcast{
+		msg:    b,
+		notify: nil,
+	})
+}
+
+func (gm *GossipManager) deletePartitionFromIndex(partition string) {
+	log.Info().Str("partition", gm.UltraQ.Partition).Str("remote partition", partition).Msg("deleting partition from partition index")
+	gm.PartitionIndexMu.Lock()
+	defer gm.PartitionIndexMu.Unlock()
+	delete(gm.PartitionIndex, partition)
+}
+
+// Scans over all known topics and deletes the partition if it exists
+func (gm *GossipManager) deletePartitionFromTopicIndex(partition string) {
+	log.Info().Str("partition", gm.UltraQ.Partition).Str("remote partition", partition).Msg("deleting partition from topic index")
+	gm.RemotePartitionTopicIndexMu.Lock()
+	defer gm.RemotePartitionTopicIndexMu.Unlock()
+	for _, topicIndex := range gm.RemotePartitionTopicIndex {
+		delete(topicIndex, partition)
 	}
 }
