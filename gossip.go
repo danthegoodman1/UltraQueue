@@ -163,7 +163,9 @@ func (gm *GossipManager) Shutdown() {
 	log.Info().Str("partition", gm.UltraQ.Partition).Msg("Shutting down gossip manager...")
 	returnChan := make(chan struct{}, 1)
 	gm.topicPollStopChan <- returnChan
+	log.Debug().Str("partition", gm.UltraQ.Partition).Msg("Leaving cluster...")
 	gm.MemberList.Leave(time.Second * 10)
+	log.Debug().Str("partition", gm.UltraQ.Partition).Msg("Shutting down...")
 	gm.MemberList.Shutdown()
 	<-returnChan
 	log.Info().Str("partition", gm.UltraQ.Partition).Msg("Shut down gossip manager")
