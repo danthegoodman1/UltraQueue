@@ -13,7 +13,7 @@ func (ed *eventDelegate) NotifyJoin(node *memberlist.Node) {
 	log.Debug().Str("nodeID", ed.gm.NodeID).Msg("A node has joined: " + node.String())
 	if ed.gm.broadcasts != nil {
 		// Broadcast out advertise address and port
-		ed.gm.broadcastAdvertiseAddress()
+		go ed.gm.broadcastAdvertiseAddress()
 	}
 }
 
