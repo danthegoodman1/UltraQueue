@@ -20,8 +20,8 @@ func (ed *eventDelegate) NotifyJoin(node *memberlist.Node) {
 func (ed *eventDelegate) NotifyLeave(node *memberlist.Node) {
 	log.Debug().Str("nodeID", ed.gm.NodeID).Msg("A node has left: " + node.Name)
 	if node.Name != ed.gm.NodeID {
-		ed.gm.deletePartitionFromIndex(node.Name)
-		ed.gm.deletePartitionFromTopicIndex(node.Name)
+		go ed.gm.deletePartitionFromIndex(node.Name)
+		go ed.gm.deletePartitionFromTopicIndex(node.Name)
 	}
 }
 
