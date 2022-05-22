@@ -21,12 +21,12 @@ func NewTopic(topicName string) *Topic {
 }
 
 // Retrieves up to numTasks tasks in priority order
-func (topic *Topic) Dequeue(numTasks int) []*InTreeTask {
+func (topic *Topic) Dequeue(numTasks int32) []*InTreeTask {
 	tasks := make([]*InTreeTask, 0)
 
 	topic.mu.Lock()
 	defer topic.mu.Unlock()
-	count := 0
+	var count int32 = 0
 	topic.tree.Descend(func(i btree.Item) bool {
 		itt, _ := i.(*InTreeTask)
 		tasks = append(tasks, itt)

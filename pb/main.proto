@@ -29,8 +29,12 @@ message DequeueRequest {
 }
 
 message TaskResponse {
+  repeated TreeTask Tasks = 1;
+}
+
+message TreeTask {
   string ID = 1;
-  repeated Task Tasks = 2;
+  Task Task = 2;
 }
 
 message Task {

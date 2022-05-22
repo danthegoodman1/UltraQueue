@@ -63,7 +63,7 @@ func main() {
 	log.Warn().Msg("Received shutdown signal!")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	err = Server.Echo.Shutdown(ctx)
+	err = httpServer.Echo.Shutdown(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to shutdown HTTP server")
 	} else {

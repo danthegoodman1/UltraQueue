@@ -115,7 +115,7 @@ func (s *HTTPServer) Dequeue(c echo.Context) error {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	tasks, err := s.UQ.Dequeue(body.Topic, int(body.Tasks), int(body.InFlightTTLSeconds))
+	tasks, err := s.UQ.Dequeue(body.Topic, body.Tasks, body.InFlightTTLSeconds)
 	if err != nil {
 		log.Error().Err(err).Interface("body", body).Msg("failed to dequeue message from http")
 		return c.String(http.StatusInternalServerError, err.Error())
@@ -162,7 +162,7 @@ func (s *HTTPServer) Nack(c echo.Context) error {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	err = s.UQ.Nack(body.TaskID, int(utils.DefaultInt32(body.DelaySeconds, 0)))
+	err = s.UQ.Nack(body.TaskID, utils.DefaultInt32(body.DelaySeconds, 0))
 	if err != nil {
 		log.Error().Err(err).Interface("body", body).Msg("failed to nack from http")
 		return c.String(http.StatusInternalServerError, err.Error())
