@@ -108,6 +108,13 @@ func (s *HTTPServer) Dequeue(c echo.Context) error {
 	}
 
 	tasks, err := s.UQ.Dequeue(body.Topic, int(body.Tasks), int(body.InFlightTTLSeconds))
+	if err != nil {
+		log.Error().Err(err).Interface("body", body).Msg("failed to dequeue message from http")
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+	if len(tasks) == 0 {
+		return c.NoContent(http.StatusNoContent)
+	}
 
 	return c.JSON(http.StatusOK, tasks)
 }
