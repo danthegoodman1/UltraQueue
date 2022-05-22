@@ -27,7 +27,7 @@ func NewInternalServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
 	}
 }
 
-func (g *InternalGRPCServer) Dequeue(context.Context, *pb.DequeueRequest) (*pb.Task, error) {
+func (g *InternalGRPCServer) Dequeue(context.Context, *pb.DequeueRequest) (*pb.TaskResponse, error) {
 
 }
 

@@ -3,7 +3,7 @@ syntax = "proto3";
 option go_package = "./pb";
 
 service UltraQueueInternal {
-  rpc Dequeue(DequeueRequest) returns (Task);
+  rpc Dequeue(DequeueRequest) returns (TaskResponse);
   rpc Ack(AckRequest) returns (Applied);
   rpc Nack(NackRequest) returns (Applied);
 }
