@@ -5,29 +5,36 @@ import (
 	"net"
 
 	"github.com/danthegoodman1/UltraQueue/pb"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 )
 
-type GRPCServer struct {
+var (
+	internalGRPCServer *grpc.Server
+)
+
+type InternalGRPCServer struct {
 	pb.UnsafeUltraQueueInternalServer
 }
 
-func NewServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) *grpc.Server {
-	grpcServer := grpc.NewServer()
+func NewInternalServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
+	internalGRPCServer = grpc.NewServer()
 
-	pb.RegisterUltraQueueInternalServer(grpcServer, &GRPCServer{})
-
-	return grpcServer
+	pb.RegisterUltraQueueInternalServer(internalGRPCServer, &InternalGRPCServer{})
+	err := internalGRPCServer.Serve(lis)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to start internal grpc server")
+	}
 }
 
-func (g *GRPCServer) Dequeue(context.Context, *pb.DequeueRequest) (*pb.Task, error) {
+func (g *InternalGRPCServer) Dequeue(context.Context, *pb.DequeueRequest) (*pb.Task, error) {
 
 }
 
-func (g *GRPCServer) Ack(context.Context, *pb.AckRequest) (*pb.Applied, error) {
+func (g *InternalGRPCServer) Ack(context.Context, *pb.AckRequest) (*pb.Applied, error) {
 
 }
 
-func (g *GRPCServer) Nack(context.Context, *pb.NackRequest) (*pb.Applied, error) {
+func (g *InternalGRPCServer) Nack(context.Context, *pb.NackRequest) (*pb.Applied, error) {
 
 }
