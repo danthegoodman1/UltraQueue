@@ -16,6 +16,7 @@ import (
 type HTTPServer struct {
 	Echo *echo.Echo
 	UQ   *UltraQueue
+	GM   *GossipManager
 }
 
 type CustomValidator struct {
@@ -26,11 +27,12 @@ var (
 	Server *HTTPServer
 )
 
-func StartHTTPServer(lis net.Listener, uq *UltraQueue) {
+func StartHTTPServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
 	echoInstance := echo.New()
 	Server = &HTTPServer{
 		Echo: echoInstance,
 		UQ:   uq,
+		GM:   gm,
 	}
 	Server.Echo.HideBanner = true
 	Server.Echo.HidePort = true
@@ -55,6 +57,7 @@ func StartHTTPServer(lis net.Listener, uq *UltraQueue) {
 
 	debugGroup := Server.Echo.Group("/debug")
 	debugGroup.GET("/localTopics.json", Server.DebugGetLocalTopics)
+	debugGroup.GET("/remoteTopics.json", Server.DebugGetRemoteTopics)
 
 	SetupMetrics()
 
@@ -122,4 +125,11 @@ func (s *HTTPServer) Dequeue(c echo.Context) error {
 func (s *HTTPServer) DebugGetLocalTopics(c echo.Context) error {
 	topicLengths := s.UQ.getTopicLengths()
 	return c.JSON(http.StatusOK, topicLengths)
+}
+
+func (s *HTTPServer) DebugGetRemoteTopics(c echo.Context) error {
+	s.GM.RemotePartitionTopicIndexMu.Lock()
+	defer s.GM.RemotePartitionTopicIndexMu.Unlock()
+
+	return c.JSON(http.StatusOK, s.GM.RemotePartitionTopicIndex)
 }
