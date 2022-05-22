@@ -314,7 +314,7 @@ func (uq *UltraQueue) ack(inTreeTaskID string) bool {
 	}
 }
 
-func (uq *UltraQueue) nack(inTreeTaskID string, delayTimeSeconds int) bool {
+func (uq *UltraQueue) nack(inTreeTaskID string, delaySeconds int) bool {
 	uq.inFlightTreeMu.Lock()
 	defer uq.inFlightTreeMu.Unlock()
 
@@ -332,7 +332,9 @@ func (uq *UltraQueue) nack(inTreeTaskID string, delayTimeSeconds int) bool {
 	})
 	if foundTask != nil {
 		uq.inFlightTree.Delete(foundTask)
-		if delayTimeSeconds > 0 {
+		if delaySeconds > 0 {
+			// Update time id
+			foundTask.TreeID = foundTask.Task.genTimeTreeID(time.Now().Add(time.Second * time.Duration(delaySeconds)))
 			// Put in delay tree
 			uq.delayTreeMu.Lock()
 			defer uq.delayTreeMu.Unlock()

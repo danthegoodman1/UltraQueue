@@ -54,6 +54,8 @@ func StartHTTPServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
 
 	Server.Echo.POST("/enqueue", Server.Enqueue)
 	Server.Echo.POST("/dequeue", Server.Dequeue)
+	Server.Echo.POST("/ack", Server.Ack)
+	Server.Echo.POST("/nack", Server.Nack)
 
 	debugGroup := Server.Echo.Group("/debug")
 	debugGroup.GET("/localTopics.json", Server.DebugGetLocalTopics)
@@ -132,4 +134,36 @@ func (s *HTTPServer) DebugGetRemoteTopics(c echo.Context) error {
 	defer s.GM.RemotePartitionTopicIndexMu.Unlock()
 
 	return c.JSON(http.StatusOK, s.GM.RemotePartitionTopicIndex)
+}
+
+func (s *HTTPServer) Ack(c echo.Context) error {
+	body := HTTPAckRequest{}
+	err := ValidateRequest(c, &body)
+	if err != nil {
+		return c.String(http.StatusBadRequest, err.Error())
+	}
+
+	err = s.UQ.Ack(body.TaskID)
+	if err != nil {
+		log.Error().Err(err).Interface("body", body).Msg("failed to ack from http")
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.NoContent(http.StatusAccepted)
+}
+
+func (s *HTTPServer) Nack(c echo.Context) error {
+	body := HTTPNackRequest{}
+	err := ValidateRequest(c, &body)
+	if err != nil {
+		return c.String(http.StatusBadRequest, err.Error())
+	}
+
+	err = s.UQ.Nack(body.TaskID, int(utils.DefaultInt32(body.DelaySeconds, 0)))
+	if err != nil {
+		log.Error().Err(err).Interface("body", body).Msg("failed to nack from http")
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.NoContent(http.StatusAccepted)
 }

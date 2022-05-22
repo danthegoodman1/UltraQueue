@@ -15,3 +15,12 @@ type HTTPDequeueRequest struct {
 	InFlightTTLSeconds int32  `json:"in_flight_ttl"`
 	Tasks              int32  `json:"tasks"`
 }
+
+type HTTPAckRequest struct {
+	TaskID string `json:"task_id"`
+}
+
+type HTTPNackRequest struct {
+	TaskID       string `json:"task_id"`
+	DelaySeconds *int32 `json:"delay_seconds"`
+}
