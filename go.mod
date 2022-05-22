@@ -3,6 +3,7 @@ module github.com/danthegoodman1/UltraQueue
 go 1.18
 
 require (
+	github.com/go-playground/validator/v10 v10.11.0
 	github.com/google/btree v1.0.1
 	github.com/hashicorp/memberlist v0.3.1
 	github.com/labstack/echo/v4 v4.7.2
@@ -10,11 +11,13 @@ require (
 	github.com/rs/zerolog v1.26.1
 	github.com/soheilhy/cmux v0.1.5
 	github.com/vmihailenco/msgpack/v5 v5.3.5
-	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
 )
 
 require (
 	github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da // indirect
+	github.com/go-playground/locales v0.14.0 // indirect
+	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
@@ -23,6 +26,7 @@ require (
 	github.com/hashicorp/go-sockaddr v1.0.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/labstack/gommon v0.3.1 // indirect
+	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/mattn/go-colorable v0.1.11 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/miekg/dns v1.1.26 // indirect

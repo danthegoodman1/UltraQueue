@@ -32,6 +32,16 @@ func main() {
 
 	log.Info().Msg("Starting UltraQueue node")
 
+	uq, err := NewUltraQueue("testpart", 100)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to start new ultra queue")
+	}
+
+	gm, err := NewGossipManager("testpart", "0.0.0.0", uq, 0, "127.0.0.1", "9999", []string{})
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
+	}
+
 	port := utils.GetEnvOrDefault("PORT", "8080")
 	log.Debug().Msg("Starting cmux listener on port " + port)
 
@@ -42,7 +52,7 @@ func main() {
 
 	m := cmux.New(lis)
 	httpL := m.Match(cmux.HTTP2(), cmux.HTTP1Fast())
-	go StartHTTPServer(httpL)
+	go StartHTTPServer(httpL, uq)
 
 	go m.Serve()
 
@@ -59,6 +69,10 @@ func main() {
 	} else {
 		log.Info().Msg("Successfully shutdown HTTP server")
 	}
+
+	gm.Shutdown()
+	log.Info().Msg("Shut down gossip manager")
+
 }
 
 type CallerHook struct {

@@ -62,7 +62,7 @@ func (uq *UltraQueue) Shutdown() {
 	log.Info().Str("partition", uq.Partition).Msg("Shut down ultra queue")
 }
 
-func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, delaySeconds int64) error {
+func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, delaySeconds int32) error {
 	for _, topicName := range topics {
 		task := NewTask(topicName, uq.Partition, payload, priority)
 
@@ -85,6 +85,10 @@ func (uq *UltraQueue) Dequeue(topicName string, numTasks, inFlightTTLSeconds int
 	if err != nil {
 		log.Error().Err(err).Msg("Error dequeuing task")
 		return
+	}
+
+	for _, task := range tasks {
+		task.Task.DeliveryAttempts++
 	}
 
 	// TODO: Increment dequeue metric
@@ -117,7 +121,7 @@ func (uq *UltraQueue) Nack(inFlightTaskID string, delaySeconds int) (err error) 
 	return
 }
 
-func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int64) error {
+func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int32) error {
 	treeID := task.genTimeTreeID(task.CreatedAt.Add(time.Second * time.Duration(delaySeconds)))
 	treeTask := NewInTreeTask(treeID, task)
 

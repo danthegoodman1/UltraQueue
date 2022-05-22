@@ -5,6 +5,8 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
+	"github.com/danthegoodman1/UltraQueue/utils"
+	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/rs/zerolog/log"
@@ -13,16 +15,22 @@ import (
 
 type HTTPServer struct {
 	Echo *echo.Echo
+	UQ   *UltraQueue
+}
+
+type CustomValidator struct {
+	validator *validator.Validate
 }
 
 var (
 	Server *HTTPServer
 )
 
-func StartHTTPServer(lis net.Listener) {
+func StartHTTPServer(lis net.Listener, uq *UltraQueue) {
 	echoInstance := echo.New()
 	Server = &HTTPServer{
 		Echo: echoInstance,
+		UQ:   uq,
 	}
 	Server.Echo.HideBanner = true
 	Server.Echo.HidePort = true
@@ -37,9 +45,16 @@ func StartHTTPServer(lis net.Listener) {
 		Output:           log.Logger,
 	}
 	Server.Echo.Use(middleware.LoggerWithConfig(config))
+	Server.Echo.Validator = &CustomValidator{validator: validator.New()}
 
 	// Health Check route
-	Server.Echo.GET("/hc", HealthCheck)
+	Server.Echo.GET("/hc", Server.HealthCheck)
+
+	Server.Echo.POST("/enqueue", Server.Enqueue)
+	Server.Echo.POST("/dequeue", Server.Dequeue)
+
+	debugGroup := Server.Echo.Group("/debug")
+	debugGroup.GET("/localTopics.json", Server.DebugGetLocalTopics)
 
 	SetupMetrics()
 
@@ -47,6 +62,13 @@ func StartHTTPServer(lis net.Listener) {
 	Server.Echo.Listener = lis
 	server := &http2.Server{}
 	Server.Echo.StartH2CServer("", server)
+}
+
+func (cv *CustomValidator) Validate(i interface{}) error {
+	if err := cv.validator.Struct(i); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	return nil
 }
 
 func ValidateRequest(c echo.Context, s interface{}) error {
@@ -59,6 +81,38 @@ func ValidateRequest(c echo.Context, s interface{}) error {
 	return nil
 }
 
-func HealthCheck(c echo.Context) error {
+func (HTTPServer) HealthCheck(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
+}
+
+func (s *HTTPServer) Enqueue(c echo.Context) error {
+	body := HTTPEnqueueRequest{}
+	err := ValidateRequest(c, &body)
+	if err != nil {
+		return c.String(http.StatusBadRequest, err.Error())
+	}
+
+	err = s.UQ.Enqueue(body.Topics, []byte(body.Payload), utils.DefaultInt32(body.Priority, 10), utils.DefaultInt32(body.DelaySeconds, 0))
+	if err != nil {
+		log.Error().Err(err).Interface("body", body).Msg("failed to enqueue message from http")
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+	return c.String(http.StatusAccepted, http.StatusText(http.StatusAccepted))
+}
+
+func (s *HTTPServer) Dequeue(c echo.Context) error {
+	body := HTTPDequeueRequest{}
+	err := ValidateRequest(c, &body)
+	if err != nil {
+		return c.String(http.StatusBadRequest, err.Error())
+	}
+
+	tasks, err := s.UQ.Dequeue(body.Topic, int(body.Tasks), int(body.InFlightTTLSeconds))
+
+	return c.JSON(http.StatusOK, tasks)
+}
+
+func (s *HTTPServer) DebugGetLocalTopics(c echo.Context) error {
+	topicLengths := s.UQ.getTopicLengths()
+	return c.JSON(http.StatusOK, topicLengths)
 }
