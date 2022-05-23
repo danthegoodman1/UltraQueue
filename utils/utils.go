@@ -43,3 +43,10 @@ func DefaultInt32(in *int32, defaultVal int32) int32 {
 	}
 	return defaultVal
 }
+
+func Defaultint32(in *int32, defaultVal int32) int32 {
+	if in != nil {
+		return *in
+	}
+	return defaultVal
+}

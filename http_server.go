@@ -24,19 +24,19 @@ type CustomValidator struct {
 }
 
 var (
-	Server *HTTPServer
+	httpServer *HTTPServer
 )
 
 func StartHTTPServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
 	echoInstance := echo.New()
-	Server = &HTTPServer{
+	httpServer = &HTTPServer{
 		Echo: echoInstance,
 		UQ:   uq,
 		GM:   gm,
 	}
-	Server.Echo.HideBanner = true
-	Server.Echo.HidePort = true
-	// Server.Echo.Use(middleware.Logger())
+	httpServer.Echo.HideBanner = true
+	httpServer.Echo.HidePort = true
+	// httpServer.Echo.Use(middleware.Logger())
 	config := middleware.LoggerConfig{
 		Skipper: middleware.DefaultSkipper,
 		Format: `{"time":"${time_rfc3339_nano}","id":"${id}","remote_ip":"${remote_ip}",` +
@@ -46,27 +46,30 @@ func StartHTTPServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
 		CustomTimeFormat: "2006-01-02 15:04:05.00000",
 		Output:           log.Logger,
 	}
-	Server.Echo.Use(middleware.LoggerWithConfig(config))
-	Server.Echo.Validator = &CustomValidator{validator: validator.New()}
+	httpServer.Echo.Use(middleware.LoggerWithConfig(config))
+	httpServer.Echo.Validator = &CustomValidator{validator: validator.New()}
 
 	// Health Check route
-	Server.Echo.GET("/hc", Server.HealthCheck)
+	httpServer.Echo.GET("/hc", httpServer.HealthCheck)
 
-	Server.Echo.POST("/enqueue", Server.Enqueue)
-	Server.Echo.POST("/dequeue", Server.Dequeue)
-	Server.Echo.POST("/ack", Server.Ack)
-	Server.Echo.POST("/nack", Server.Nack)
+	httpServer.Echo.POST("/enqueue", httpServer.Enqueue)
+	httpServer.Echo.POST("/dequeue", httpServer.Dequeue)
+	httpServer.Echo.POST("/ack", httpServer.Ack)
+	httpServer.Echo.POST("/nack", httpServer.Nack)
 
-	debugGroup := Server.Echo.Group("/debug")
-	debugGroup.GET("/localTopics.json", Server.DebugGetLocalTopics)
-	debugGroup.GET("/remoteTopics.json", Server.DebugGetRemoteTopics)
+	debugGroup := httpServer.Echo.Group("/debug")
+	debugGroup.GET("/localTopics.json", httpServer.DebugGetLocalTopics)
+	debugGroup.GET("/remoteTopics.json", httpServer.DebugGetRemoteTopics)
 
 	SetupMetrics()
 
-	log.Info().Msg("Starting HTTP API")
-	Server.Echo.Listener = lis
+	log.Info().Msg("Starting HTTP API at " + lis.Addr().String())
+	httpServer.Echo.Listener = lis
 	server := &http2.Server{}
-	Server.Echo.StartH2CServer("", server)
+	err := httpServer.Echo.StartH2CServer("", server)
+	if err != nil && err != http.ErrServerClosed {
+		log.Fatal().Err(err).Msg("Failed to start h2c server")
+	}
 }
 
 func (cv *CustomValidator) Validate(i interface{}) error {
@@ -112,7 +115,7 @@ func (s *HTTPServer) Dequeue(c echo.Context) error {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	tasks, err := s.UQ.Dequeue(body.Topic, int(body.Tasks), int(body.InFlightTTLSeconds))
+	tasks, err := s.UQ.Dequeue(body.Topic, body.Tasks, body.InFlightTTLSeconds)
 	if err != nil {
 		log.Error().Err(err).Interface("body", body).Msg("failed to dequeue message from http")
 		return c.String(http.StatusInternalServerError, err.Error())
@@ -159,7 +162,7 @@ func (s *HTTPServer) Nack(c echo.Context) error {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	err = s.UQ.Nack(body.TaskID, int(utils.DefaultInt32(body.DelaySeconds, 0)))
+	err = s.UQ.Nack(body.TaskID, utils.DefaultInt32(body.DelaySeconds, 0))
 	if err != nil {
 		log.Error().Err(err).Interface("body", body).Msg("failed to nack from http")
 		return c.String(http.StatusInternalServerError, err.Error())

@@ -14,8 +14,8 @@ type Task struct {
 	Payload   []byte
 	CreatedAt time.Time
 
-	Version          int64
-	DeliveryAttempts int64
+	Version          int32
+	DeliveryAttempts int32
 
 	Priority int32
 }

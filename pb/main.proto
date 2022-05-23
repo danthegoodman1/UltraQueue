@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+option go_package = "./pb";
+
+service UltraQueueInternal {
+  rpc Dequeue(DequeueRequest) returns (TaskResponse);
+  rpc Ack(AckRequest) returns (Applied);
+  rpc Nack(NackRequest) returns (Applied);
+}
+
+
+message Applied {
+  bool applied = 1;
+}
+
+message AckRequest {
+  string TaskID = 1;
+}
+
+message NackRequest {
+  string TaskID = 1;
+  sint32 DelaySeconds = 2;
+}
+
+message DequeueRequest {
+  string Topic = 1 ;
+	sint32 InFlightTTLSeconds = 2;
+	sint32 Tasks = 3;
+}
+
+message TaskResponse {
+  repeated TreeTask Tasks = 1;
+}
+
+message TreeTask {
+  string ID = 1;
+  Task Task = 2;
+}
+
+message Task {
+  string ID = 1;
+	string Topic = 2;
+
+	bytes Payload = 3;
+	string CreatedAt = 4;
+
+  sint32 Version = 5;
+	sint32 DeliveryAttempts = 6;
+
+	sint32 Priority = 7;
+}
