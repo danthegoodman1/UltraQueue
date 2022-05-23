@@ -63,11 +63,11 @@ func StartHTTPServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
 
 	SetupMetrics()
 
-	log.Info().Msg("Starting HTTP API")
+	log.Info().Msg("Starting HTTP API at " + lis.Addr().String())
 	httpServer.Echo.Listener = lis
 	server := &http2.Server{}
 	err := httpServer.Echo.StartH2CServer("", server)
-	if err != nil {
+	if err != nil && err != http.ErrServerClosed {
 		log.Fatal().Err(err).Msg("Failed to start h2c server")
 	}
 }

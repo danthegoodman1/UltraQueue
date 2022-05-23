@@ -21,13 +21,15 @@ type InternalGRPCServer struct {
 	GM *GossipManager
 }
 
-func NewInternalServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
-	internalGRPCServer = grpc.NewServer()
+func NewInternalGRPCServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
+	var opts []grpc.ServerOption
+	internalGRPCServer = grpc.NewServer(opts...)
 
 	pb.RegisterUltraQueueInternalServer(internalGRPCServer, &InternalGRPCServer{
 		UQ: uq,
 		GM: gm,
 	})
+	log.Info().Msg("Starting internal grpc server on " + lis.Addr().String())
 	err := internalGRPCServer.Serve(lis)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to start internal grpc server")

@@ -42,19 +42,31 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
 
-	port := utils.GetEnvOrDefault("PORT", "8080")
+	port := utils.GetEnvOrDefault("PORT", "9090")
+	internalPort := utils.GetEnvOrDefault("INTERNAL_PORT", "9091")
 	log.Debug().Msg("Starting cmux listener on port " + port)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
 		log.Fatal().Err(err).Str("port", port).Msg("Failed to start cmux listener")
 	}
+	lisInternal, err := net.Listen("tcp", fmt.Sprintf(":%s", internalPort))
+	if err != nil {
+		log.Fatal().Err(err).Str("port", port).Msg("Failed to start cmux internal listener")
+	}
 
 	m := cmux.New(lis)
+	mInternal := cmux.New(lisInternal)
+
 	httpL := m.Match(cmux.HTTP2(), cmux.HTTP1Fast())
 	go StartHTTPServer(httpL, uq, gm)
 
 	go m.Serve()
+
+	internalGRPCListener := mInternal.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+	go NewInternalGRPCServer(internalGRPCListener, uq, gm)
+
+	go mInternal.Serve()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)

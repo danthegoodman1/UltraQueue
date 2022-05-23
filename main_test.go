@@ -8,7 +8,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func TestMain(m *testing.M) {
+func TestMain(ma *testing.M) {
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro
+
+	log.Logger = log.Logger.Hook(CallerHook{})
 
 	if os.Getenv("PRETTY") == "1" {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
@@ -18,5 +21,5 @@ func TestMain(m *testing.M) {
 		log.Debug().Msg("Debugging logging activated")
 	}
 
-	os.Exit(m.Run())
+	os.Exit(ma.Run())
 }
