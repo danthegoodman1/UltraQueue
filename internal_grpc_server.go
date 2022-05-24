@@ -70,7 +70,7 @@ func (g *InternalGRPCServer) Dequeue(ctx context.Context, in *pb.DequeueRequest)
 func (g *InternalGRPCServer) Ack(ctx context.Context, in *pb.AckRequest) (*pb.Applied, error) {
 	err := g.UQ.Ack(in.GetTaskID())
 	if err != nil {
-		log.Error().Err(err).Interface("body", in).Msg("failed to ack message from internal grpc")
+		log.Error().Err(err).Interface("body", in).Str("partition", g.UQ.Partition).Msg("failed to ack message from internal grpc")
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return &pb.Applied{}, nil

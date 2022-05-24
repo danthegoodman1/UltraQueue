@@ -1,16 +1,22 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"time"
 
+	"github.com/danthegoodman1/UltraQueue/pb"
 	"github.com/danthegoodman1/UltraQueue/utils"
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/net/http2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type HTTPServer struct {
@@ -60,6 +66,7 @@ func StartHTTPServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
 	debugGroup := httpServer.Echo.Group("/debug")
 	debugGroup.GET("/localTopics.json", httpServer.DebugGetLocalTopics)
 	debugGroup.GET("/remoteTopics.json", httpServer.DebugGetRemoteTopics)
+	debugGroup.GET("/remotePartitions.json", httpServer.DebugGetRemotePartitions)
 
 	SetupMetrics()
 
@@ -139,6 +146,13 @@ func (s *HTTPServer) DebugGetRemoteTopics(c echo.Context) error {
 	return c.JSON(http.StatusOK, s.GM.RemotePartitionTopicIndex)
 }
 
+func (s *HTTPServer) DebugGetRemotePartitions(c echo.Context) error {
+	s.GM.PartitionIndexMu.Lock()
+	defer s.GM.PartitionIndexMu.Unlock()
+
+	return c.JSON(http.StatusOK, s.GM.PartitionIndex)
+}
+
 func (s *HTTPServer) Ack(c echo.Context) error {
 	body := HTTPAckRequest{}
 	err := ValidateRequest(c, &body)
@@ -146,12 +160,50 @@ func (s *HTTPServer) Ack(c echo.Context) error {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	err = s.UQ.Ack(body.TaskID)
+	// Check partition
+	_, partition, _, err := GetTaskIDParts(body.TaskID)
 	if err != nil {
-		log.Error().Err(err).Interface("body", body).Msg("failed to ack from http")
-		return c.String(http.StatusInternalServerError, err.Error())
+		return c.String(http.StatusBadRequest, err.Error())
 	}
 
+	if partition == s.UQ.Partition {
+		// We are the partition
+		err = s.UQ.Ack(body.TaskID)
+		if err != nil {
+			log.Error().Err(err).Interface("body", body).Msg("failed to ack from http")
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+
+		return c.NoContent(http.StatusAccepted)
+	}
+	// Otherwise we need to route to the correct partition
+	// Find the partition address
+	remoteNode := s.GM.getRemotePartitionAddress(partition)
+	if remoteNode == nil {
+		log.Warn().Str("taskID", body.TaskID).Str("remotePartition", partition).Str("partition", s.UQ.Partition).Msg("did not find remote partition for partition")
+		return c.String(http.StatusNotFound, "did not find remote partition for partition")
+	}
+
+	// Use the internal grpc interface to ack
+	// TODO: Make secure based on TLS config
+	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", remoteNode.AdvertiseAddress, remoteNode.AdvertisePort), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	if err != nil {
+		log.Error().Err(err).Str("taskID", body.TaskID).Str("remotePartition", partition).Str("partition", s.UQ.Partition).Msg("failed to dial remote partition")
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(c.Request().Context(), time.Second*20)
+	defer cancel()
+
+	client := pb.NewUltraQueueInternalClient(conn)
+	_, err = client.Ack(ctx, &pb.AckRequest{
+		TaskID: body.TaskID,
+	})
+	if err != nil {
+		log.Error().Err(err).Str("taskID", body.TaskID).Str("remotePartition", partition).Str("partition", s.UQ.Partition).Msg("failed to ack remote partition")
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
 	return c.NoContent(http.StatusAccepted)
 }
 
@@ -162,11 +214,49 @@ func (s *HTTPServer) Nack(c echo.Context) error {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	err = s.UQ.Nack(body.TaskID, utils.DefaultInt32(body.DelaySeconds, 0))
+	// Check partition
+	_, partition, _, err := GetTaskIDParts(body.TaskID)
 	if err != nil {
-		log.Error().Err(err).Interface("body", body).Msg("failed to nack from http")
-		return c.String(http.StatusInternalServerError, err.Error())
+		return c.String(http.StatusBadRequest, err.Error())
 	}
 
+	if partition == s.UQ.Partition {
+		err = s.UQ.Nack(body.TaskID, utils.DefaultInt32(body.DelaySeconds, 0))
+		if err != nil {
+			log.Error().Err(err).Interface("body", body).Msg("failed to nack from http")
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+
+		return c.NoContent(http.StatusAccepted)
+	}
+
+	// Otherwise we need to route to the correct partition
+	// Find the partition address
+	remoteNode := s.GM.getRemotePartitionAddress(partition)
+	if remoteNode == nil {
+		log.Warn().Str("taskID", body.TaskID).Str("remotePartition", partition).Str("partition", s.UQ.Partition).Msg("did not find remote partition for partition")
+		return c.String(http.StatusNotFound, "did not find remote partition for partition")
+	}
+
+	// Use the internal grpc interface to ack
+	// TODO: Make secure based on TLS config
+	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", remoteNode.AdvertiseAddress, remoteNode.AdvertisePort), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	if err != nil {
+		log.Error().Err(err).Str("taskID", body.TaskID).Str("remotePartition", partition).Str("partition", s.UQ.Partition).Msg("failed to dial remote partition")
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(c.Request().Context(), time.Second*20)
+	defer cancel()
+
+	client := pb.NewUltraQueueInternalClient(conn)
+	_, err = client.Nack(ctx, &pb.NackRequest{
+		TaskID: body.TaskID,
+	})
+	if err != nil {
+		log.Error().Err(err).Str("taskID", body.TaskID).Str("remotePartition", partition).Str("partition", s.UQ.Partition).Msg("failed to nack remote partition")
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
 	return c.NoContent(http.StatusAccepted)
 }

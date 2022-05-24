@@ -36,7 +36,7 @@ func TestInternalGRPCServer(t *testing.T) {
 	}
 	lisInternal, err := net.Listen("tcp", fmt.Sprintf(":%s", internalPort))
 	if err != nil {
-		log.Fatal().Err(err).Str("port", port).Msg("Failed to start cmux internal listener")
+		log.Fatal().Err(err).Str("port", internalPort).Msg("Failed to start cmux internal listener")
 	}
 
 	m := cmux.New(lis)
