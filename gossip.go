@@ -199,6 +199,16 @@ func (gm *GossipManager) putIndexRemotePartitionTopicLength(partition, topicName
 	}
 }
 
+func (gm *GossipManager) getRemotePartitionAddress(partition string) (node *GossipNode) {
+	gm.PartitionIndexMu.Lock()
+	defer gm.PartitionIndexMu.Unlock()
+	if partitionNode, exists := gm.PartitionIndex[partition]; exists {
+		return partitionNode
+	} else {
+		return nil
+	}
+}
+
 func (gm *GossipManager) broadcastAdvertiseAddress() {
 	msg := NewPartitionAddressAdvertise(gm.UltraQ.Partition, gm.Node.AdvertiseAddress, gm.Node.AdvertisePort)
 	b, err := msgpack.Marshal(msg)

@@ -1,10 +1,16 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	nanoid "github.com/matoous/go-nanoid/v2"
+)
+
+var (
+	ErrInvalidTaskID = errors.New("invalid task id")
 )
 
 type Task struct {
@@ -38,7 +44,7 @@ func NewTask(topic, partition string, payload []byte, priority int32) *Task {
 
 // The ID generated to route the ack/nack requests back to the partition
 func (task *Task) genExternalID(partition string, delayTo time.Time) string {
-	// partition#id
+	// millis_partition_id
 	return fmt.Sprintf("%d_%s_%s", delayTo.UnixMilli(), partition, task.ID)
 }
 
@@ -55,4 +61,17 @@ func (task *Task) genTimeTreeID(delayTo time.Time) string {
 func (task *Task) genPriorityTreeID() string {
 	// Priority_TaskID
 	return fmt.Sprintf("%d_%s", task.Priority, task.ID)
+}
+
+func GetTaskIDParts(taskID string) (inFlightTimeoutMS, partition, id string, err error) {
+	parts := strings.Split(taskID, "_")
+	if len(parts) != 3 {
+		err = ErrInvalidTaskID
+		return
+	}
+	inFlightTimeoutMS = parts[0]
+	partition = parts[1]
+	id = parts[2]
+
+	return
 }

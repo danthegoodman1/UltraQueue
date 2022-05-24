@@ -37,13 +37,14 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to start new ultra queue")
 	}
 
-	gm, err := NewGossipManager("testpart", "0.0.0.0", uq, 0, "127.0.0.1", "9999", []string{})
+	port := utils.GetEnvOrDefault("PORT", "9090")
+	internalPort := utils.GetEnvOrDefault("INTERNAL_PORT", "9091")
+
+	gm, err := NewGossipManager("testpart", "0.0.0.0", uq, 0, "127.0.0.1", internalPort, []string{})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
 
-	port := utils.GetEnvOrDefault("PORT", "9090")
-	internalPort := utils.GetEnvOrDefault("INTERNAL_PORT", "9091")
 	log.Debug().Msg("Starting cmux listener on port " + port)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
@@ -52,7 +53,7 @@ func main() {
 	}
 	lisInternal, err := net.Listen("tcp", fmt.Sprintf(":%s", internalPort))
 	if err != nil {
-		log.Fatal().Err(err).Str("port", port).Msg("Failed to start cmux internal listener")
+		log.Fatal().Err(err).Str("port", internalPort).Msg("Failed to start cmux internal listener")
 	}
 
 	m := cmux.New(lis)
