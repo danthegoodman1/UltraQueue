@@ -109,7 +109,7 @@ func TestRemoteAck(t *testing.T) {
 	}
 
 	// Wait for gossip propagation
-	time.Sleep(time.Millisecond * 4000)
+	time.Sleep(time.Millisecond * 400)
 
 	bodyStruct := HTTPAckRequest{
 		TaskID: tasks[0].TreeID,
@@ -249,7 +249,7 @@ func TestRemoteNack(t *testing.T) {
 	}
 
 	// Wait for gossip propagation
-	time.Sleep(time.Millisecond * 4000)
+	time.Sleep(time.Millisecond * 400)
 
 	delay := int32(10)
 	bodyStruct := HTTPNackRequest{
