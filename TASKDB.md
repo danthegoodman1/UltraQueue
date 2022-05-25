@@ -20,7 +20,9 @@ You may choose the TaskDB that best suits your performance, durability, and avai
 
 ## TaskDB recommendations
 
-**If you are going for Global capabilities, use CockroachDB or Cassandra/ScyllaDB.** This will not only provide the greatest durability, but multi-region clusters can survive entire regional outages, allowing you to move resources to another region and pickup where the down partitions left off.
+**If you are going for Global capabilities, use CockroachDB or Cassandra/ScyllaDB.**
+
+This will not only provide the greatest durability, but multi-region clusters can survive entire regional outages, allowing you to move resources to another region and pickup where the down partitions left off.
 
 Between the two, it is best to use the DB that you are already using if one.
 
