@@ -14,6 +14,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/rs/zerolog/log"
+	"github.com/soheilhy/cmux"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -74,7 +75,7 @@ func StartHTTPServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
 	httpServer.Echo.Listener = lis
 	server := &http2.Server{}
 	err := httpServer.Echo.StartH2CServer("", server)
-	if err != nil && err != http.ErrServerClosed {
+	if err != nil && err != http.ErrServerClosed && err != cmux.ErrServerClosed {
 		log.Fatal().Err(err).Msg("Failed to start h2c server")
 	}
 }

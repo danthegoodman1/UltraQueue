@@ -6,6 +6,7 @@ import (
 
 	"github.com/danthegoodman1/UltraQueue/pb"
 	"github.com/rs/zerolog/log"
+	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,7 +32,7 @@ func NewInternalGRPCServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) 
 	})
 	log.Info().Msg("Starting internal grpc server on " + lis.Addr().String())
 	err := internalGRPCServer.Serve(lis)
-	if err != nil {
+	if err != nil && err != grpc.ErrServerStopped && err != cmux.ErrServerClosed {
 		log.Fatal().Err(err).Msg("failed to start internal grpc server")
 	}
 }
