@@ -40,9 +40,12 @@ If you can either tolerate lower consistency, slower failover times (to maintain
 
 An in-memory index for the payload data, ignores state transitions since they are lost during failover anyway.
 
-**Performance:** Highest
-**Durability:** None
-**Failover:** None
+Payload size will greatly impact queue size as the payloads are kept in memory.
+
+
+| Performance | Durability | Failover |
+| ----------- | ----------- | --- |
+| Highest      | None | None |
 
 ### DiskKV
 
@@ -52,18 +55,20 @@ Use DiskKV if you are optimizing for speed and have no multi-AZ or multi-region 
 
 i.e. If you are using a provider like DigitalOcean, or a single-AZ GKE cluster, this is the best option.
 
-**Performance:** Very high
-**Durability:** Yes
-**Failover:** If the same disk can be attached to. If losing a region (or an AZ) you may not have access to the data.
+| Performance | Durability | Failover |
+| ----------- | ----------- | --- |
+| Very High      | Yes | If the same disk can be attached to. If losing a region (or an AZ) you may not have access to the data. |
 
 ### CockroachDB
 
-**Performance:** Medium
-**Durability:** Highest
-**Failover:** Global
+
+| Performance | Durability | Failover |
+| ----------- | ----------- | --- |
+| Medium      | Highest | Global |
 
 ### Cassandra/ScyllaDB
 
-**Performance:** Medium-High (tunable consistency)
-**Durability:** High-Highest (tunable consistency)
-**Failover:** Global, performance based on chosen consistency level
+
+| Performance | Durability | Failover |
+| ----------- | ----------- | --- |
+| Medium-High (tunable consistency) | High-Highest (tunable consistency) | Global, performance based on chosen consistency level |
