@@ -37,6 +37,7 @@ func TestRemoteAck(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
+	defer gm1.Shutdown()
 
 	uq2, err := NewUltraQueue(partition2, 100)
 	if err != nil {
@@ -47,6 +48,7 @@ func TestRemoteAck(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
+	defer gm2.Shutdown()
 
 	lis1, err := net.Listen("tcp", fmt.Sprintf(":%s", httpPort1))
 	if err != nil {
@@ -73,11 +75,13 @@ func TestRemoteAck(t *testing.T) {
 	go StartHTTPServer(httpL1, uq1, gm1)
 
 	go m1.Serve()
+	defer m1.Close()
 
 	internalGRPCListener1 := mInternal1.Match(cmux.HTTP2())
 	go NewInternalGRPCServer(internalGRPCListener1, uq1, gm1)
 
 	go mInternal1.Serve()
+	defer mInternal1.Close()
 
 	m2 := cmux.New(lis2)
 	mInternal2 := cmux.New(lisInternal2)
@@ -86,11 +90,13 @@ func TestRemoteAck(t *testing.T) {
 	go StartHTTPServer(httpL2, uq2, gm2)
 
 	go m2.Serve()
+	defer m2.Close()
 
 	internalGRPCListener2 := mInternal2.Match(cmux.HTTP2())
 	go NewInternalGRPCServer(internalGRPCListener2, uq2, gm2)
 
 	go mInternal2.Serve()
+	defer mInternal2.Close()
 
 	// ---------------------------------------------------------------------------
 	// Run the test
@@ -177,6 +183,7 @@ func TestRemoteNack(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
+	defer gm1.Shutdown()
 
 	uq2, err := NewUltraQueue(partition2, 100)
 	if err != nil {
@@ -187,6 +194,7 @@ func TestRemoteNack(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
+	defer gm2.Shutdown()
 
 	lis1, err := net.Listen("tcp", fmt.Sprintf(":%s", httpPort1))
 	if err != nil {
@@ -213,11 +221,13 @@ func TestRemoteNack(t *testing.T) {
 	go StartHTTPServer(httpL1, uq1, gm1)
 
 	go m1.Serve()
+	defer m1.Close()
 
 	internalGRPCListener1 := mInternal1.Match(cmux.HTTP2())
 	go NewInternalGRPCServer(internalGRPCListener1, uq1, gm1)
 
 	go mInternal1.Serve()
+	defer mInternal1.Close()
 
 	m2 := cmux.New(lis2)
 	mInternal2 := cmux.New(lisInternal2)
@@ -226,11 +236,13 @@ func TestRemoteNack(t *testing.T) {
 	go StartHTTPServer(httpL2, uq2, gm2)
 
 	go m2.Serve()
+	defer m2.Close()
 
 	internalGRPCListener2 := mInternal2.Match(cmux.HTTP2())
 	go NewInternalGRPCServer(internalGRPCListener2, uq2, gm2)
 
 	go mInternal2.Serve()
+	defer mInternal2.Close()
 
 	// ---------------------------------------------------------------------------
 	// Run the test
