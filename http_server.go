@@ -129,7 +129,83 @@ func (s *HTTPServer) Dequeue(c echo.Context) error {
 		return c.String(http.StatusInternalServerError, err.Error())
 	}
 	if len(tasks) == 0 {
-		return c.NoContent(http.StatusNoContent)
+		// Check other partitions
+		if len(s.GM.MemberList.Members()) > 1 {
+			log.Debug().Str("partition", s.UQ.Partition).Str("topic", body.Topic).Msg("Checking remote partitions for topic length")
+			remoteTopics := s.GM.getRemotePartitionTopics(body.Topic)
+			if remoteTopics == nil {
+				log.Debug().Str("partition", s.UQ.Partition).Str("topic", body.Topic).Msg("no remote partitions found")
+				return c.NoContent(http.StatusNoContent)
+			}
+			// Use the longest one
+			longest := ""
+			longestVal := 0
+			for topic, length := range remoteTopics {
+				if longestVal < length {
+					longest = topic
+				}
+			}
+			if longest == "" {
+				// This only happens if we don't clean the 0 length topics
+				log.Debug().Str("partition", s.UQ.Partition).Str("topic", body.Topic).Msg("no remote partitions with len > 0 for topic")
+				return c.NoContent(http.StatusNoContent)
+			}
+
+			// TODO: Remove log line?
+			log.Debug().Str("remotePartition", longest).Str("partition", s.UQ.Partition).Str("topic", body.Topic).Msg("getting from remote partition")
+
+			// Find the partition address
+			remoteNode := s.GM.getRemotePartitionAddress(longest)
+			if remoteNode == nil {
+				log.Warn().Str("remotePartition", longest).Str("topic", body.Topic).Str("partition", s.UQ.Partition).Msg("did not find remote partition for partition")
+				return c.String(http.StatusNotFound, "did not find remote partition for partition")
+			}
+
+			// Use the internal grpc interface to ack
+			// TODO: Make secure based on TLS config
+			conn, err := grpc.Dial(fmt.Sprintf("%s:%s", remoteNode.AdvertiseAddress, remoteNode.AdvertisePort), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+			if err != nil {
+				log.Error().Err(err).Str("remotePartition", longest).Str("topic", body.Topic).Str("partition", s.UQ.Partition).Msg("failed to dial remote partition")
+				return c.String(http.StatusInternalServerError, err.Error())
+			}
+			defer conn.Close()
+
+			ctx, cancel := context.WithTimeout(c.Request().Context(), time.Second*20)
+			defer cancel()
+
+			client := pb.NewUltraQueueInternalClient(conn)
+			remoteTasks, err := client.Dequeue(ctx, &pb.DequeueRequest{
+				Topic:              body.Topic,
+				InFlightTTLSeconds: body.InFlightTTLSeconds,
+				Tasks:              body.Tasks,
+			})
+			if err != nil {
+				log.Error().Err(err).Str("remotePartition", longest).Str("topic", body.Topic).Str("partition", s.UQ.Partition).Msg("failed to dequeue from remote partition")
+				return c.String(http.StatusInternalServerError, err.Error())
+			}
+
+			for _, task := range remoteTasks.GetTasks() {
+				tempTask := task.GetTask()
+				createdTime, err := time.Parse(time.RFC3339Nano, tempTask.CreatedAt)
+				if err != nil {
+					log.Error().Err(err).Str("remotePartition", longest).Str("topic", body.Topic).Str("partition", s.UQ.Partition).Str("remoteTime", tempTask.CreatedAt).Msg("failed to parse time from remote task")
+					// Send something valid back
+					createdTime = time.Now()
+				}
+				tasks = append(tasks, &InTreeTask{
+					TreeID: task.GetID(),
+					Task: &Task{
+						ID:               tempTask.ID,
+						Topic:            tempTask.Topic,
+						Payload:          tempTask.Payload,
+						CreatedAt:        createdTime,
+						Version:          tempTask.Version,
+						DeliveryAttempts: tempTask.DeliveryAttempts,
+						Priority:         tempTask.Priority,
+					},
+				})
+			}
+		}
 	}
 
 	return c.JSON(http.StatusOK, tasks)

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net"
+	"time"
 
 	"github.com/danthegoodman1/UltraQueue/pb"
 	"github.com/rs/zerolog/log"
@@ -57,7 +58,7 @@ func (g *InternalGRPCServer) Dequeue(ctx context.Context, in *pb.DequeueRequest)
 				ID:               task.Task.ID,
 				Topic:            task.Task.Topic,
 				Payload:          task.Task.Payload,
-				CreatedAt:        task.Task.CreatedAt.String(),
+				CreatedAt:        task.Task.CreatedAt.Format(time.RFC3339Nano),
 				Version:          task.Task.Version,
 				DeliveryAttempts: task.Task.DeliveryAttempts,
 				Priority:         task.Task.Priority,
