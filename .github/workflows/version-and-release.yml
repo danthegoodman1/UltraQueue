@@ -61,5 +61,6 @@ jobs:
       with:
         context: .
         push: true
-        tags: ${{ env.REGISTRY }}/thesaaszoo/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/thesaaszoo/${{ env.IMAGE_NAME }}:${{ steps.previoustag.outputs.tag }}
-        platforms: linux/amd64,linux/arm64
+        tags: ${{ env.REGISTRY }}/danthegoodman1/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/danthegoodman1/${{ env.IMAGE_NAME }}:${{ steps.previoustag.outputs.tag }}
+        platforms: linux/amd64
+        # platforms: linux/amd64,linux/arm64
