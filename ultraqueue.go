@@ -34,7 +34,8 @@ type UltraQueue struct {
 }
 
 func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
-	// TODO: Initialize taskdb
+	// Initialize taskdb based on config
+	// FIXME: Temporary in memory task db
 
 	uq := &UltraQueue{
 		Partition:      partition,

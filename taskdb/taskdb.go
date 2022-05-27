@@ -4,22 +4,22 @@ import "time"
 
 type TaskDB interface {
 	// Acquires the TaskDB lock as needed, then returns an AttachIterator
-	Attach() AttachIterator
+	Attach() *AttachIterator
 
 	// A Task will be inserted into the task table, and its first state inserted
-	Enqueue(state *TaskDBTaskState, payload []byte) WriteResult
+	Enqueue(state *TaskDBTaskState, payload []byte) *WriteResult
 
 	// A new task state
-	PutState(state *TaskDBTaskState) WriteResult
+	PutState(state *TaskDBTaskState) *WriteResult
 
 	// Retrieves the payload for a given task
 	GetPayload(topicName, taskID string) ([]byte, error)
 
 	// Deletes all task states for a topic, and removes the topic from the task table. If no more tasks exist then the task will be removed from the task table
-	Delete(topicName, taskID string) WriteResult
+	Delete(topicName, taskID string) *WriteResult
 
 	// Returns an iterator that will read all payloads from the DB, so they can be drained into other partitions
-	Drain() DrainIterator
+	Drain() *DrainIterator
 }
 
 type TaskDBTaskState struct {

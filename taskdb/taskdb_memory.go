@@ -1,1 +1,115 @@
 package taskdb
+
+import (
+	"fmt"
+	"sync"
+)
+
+type MemoryTaskDB struct {
+	payloadMu  *sync.Mutex
+	payloadMap map[string][]byte
+
+	taskStateMu  *sync.Mutex
+	taskStateMap map[string][]*TaskDBTaskState
+}
+
+type FakeAttachIterator struct{}
+
+type MemoryDrainIterator struct{}
+
+type MemoryWriteResult struct{}
+
+func (fai *FakeAttachIterator) Next() ([]*TaskDBTaskState, error) {
+	return nil, nil
+}
+
+func (mdi *MemoryDrainIterator) Next() ([]*DrainTask, error) {
+	// TODO: Drain from map, release every X Y
+	return nil, nil
+}
+
+func (mwr MemoryWriteResult) Get() error {
+	return nil
+}
+
+func (mtdb *MemoryTaskDB) NewMemoryTaskDB() (*MemoryTaskDB, error) {
+	return &MemoryTaskDB{
+		payloadMu:  &sync.Mutex{},
+		payloadMap: make(map[string][]byte),
+	}, nil
+}
+
+func (mtdb *MemoryTaskDB) Attach() *FakeAttachIterator {
+	return &FakeAttachIterator{}
+}
+
+func (mtdb *MemoryTaskDB) Enqueue(state *TaskDBTaskState, payload []byte) *MemoryWriteResult {
+	mapID := mtdb.getMapID(state.Topic, state.ID)
+	mtdb.insertPayload(mapID, payload)
+	mtdb.insertTaskState(mapID, state)
+	return &MemoryWriteResult{}
+}
+
+func (mtdb *MemoryTaskDB) insertPayload(mapID string, payload []byte) {
+	mtdb.payloadMu.Lock()
+	defer mtdb.payloadMu.Unlock()
+
+	mtdb.payloadMap[mapID] = payload
+}
+
+func (mtdb *MemoryTaskDB) insertTaskState(mapID string, state *TaskDBTaskState) {
+	mtdb.taskStateMu.Lock()
+	defer mtdb.taskStateMu.Unlock()
+
+	states, exists := mtdb.taskStateMap[mapID]
+	if exists {
+		mtdb.taskStateMap[mapID] = append(states, state)
+	} else {
+		mtdb.taskStateMap[mapID] = []*TaskDBTaskState{state}
+	}
+}
+
+func (mtdb *MemoryTaskDB) PutState(state *TaskDBTaskState) *MemoryWriteResult {
+	mtdb.insertTaskState(mtdb.getMapID(state.Topic, state.ID), state)
+	return &MemoryWriteResult{}
+}
+
+func (mtdb *MemoryTaskDB) GetPayload(topicName, taskID string) ([]byte, error) {
+	mtdb.payloadMu.Lock()
+	defer mtdb.payloadMu.Unlock()
+
+	payload, exists := mtdb.payloadMap[mtdb.getMapID(topicName, taskID)]
+	if !exists {
+		return nil, ErrPayloadNotFound
+	}
+	return payload, nil
+}
+
+func (mtdb *MemoryTaskDB) Delete(topicName, taskID string) *MemoryWriteResult {
+	mapID := mtdb.getMapID(topicName, taskID)
+
+	mtdb.deletePayload(mapID)
+	mtdb.deleteTaskStates(mapID)
+
+	return &MemoryWriteResult{}
+}
+
+func (mtdb *MemoryTaskDB) deletePayload(mapID string) {
+	mtdb.payloadMu.Lock()
+	defer mtdb.payloadMu.Unlock()
+	delete(mtdb.payloadMap, mapID)
+}
+
+func (mtdb *MemoryTaskDB) deleteTaskStates(mapID string) {
+	mtdb.taskStateMu.Lock()
+	defer mtdb.taskStateMu.Unlock()
+	delete(mtdb.taskStateMap, mapID)
+}
+
+func (mtdb *MemoryTaskDB) Drain() *MemoryDrainIterator {
+	return &MemoryDrainIterator{}
+}
+
+func (MemoryTaskDB) getMapID(topicName, taskID string) string {
+	return fmt.Sprintf("%s_%s", topicName, taskID)
+}
