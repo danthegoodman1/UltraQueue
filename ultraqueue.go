@@ -74,6 +74,8 @@ func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, d
 
 		// TODO: Insert task into task DB task table
 
+		// TODO: Remove payload from task going into queue
+
 		if delaySeconds > 0 {
 			uq.enqueueDelayedTask(task, delaySeconds)
 		} else {
@@ -92,6 +94,8 @@ func (uq *UltraQueue) Dequeue(topicName string, numTasks, inFlightTTLSeconds int
 		log.Error().Err(err).Msg("Error dequeuing task")
 		return
 	}
+
+	// TODO: Get task payloads
 
 	for _, task := range tasks {
 		task.Task.DeliveryAttempts++
