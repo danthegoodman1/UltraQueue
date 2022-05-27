@@ -2,7 +2,7 @@ package taskdb
 
 import "fmt"
 
-type TaskState int
+type TaskState int32
 
 const (
 	TASK_STATE_QUEUED   TaskState = 0
