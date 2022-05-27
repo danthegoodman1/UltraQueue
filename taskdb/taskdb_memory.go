@@ -13,6 +13,15 @@ type MemoryTaskDB struct {
 	taskStateMap map[string][]*TaskDBTaskState
 }
 
+func NewMemoryTaskDB() (*MemoryTaskDB, error) {
+	return &MemoryTaskDB{
+		payloadMu:    &sync.Mutex{},
+		payloadMap:   make(map[string][]byte),
+		taskStateMu:  &sync.Mutex{},
+		taskStateMap: make(map[string][]*TaskDBTaskState),
+	}, nil
+}
+
 type FakeAttachIterator struct{}
 
 type MemoryDrainIterator struct{}
@@ -39,11 +48,11 @@ func (mtdb *MemoryTaskDB) NewMemoryTaskDB() (*MemoryTaskDB, error) {
 	}, nil
 }
 
-func (mtdb *MemoryTaskDB) Attach() *FakeAttachIterator {
+func (mtdb *MemoryTaskDB) Attach() AttachIterator {
 	return &FakeAttachIterator{}
 }
 
-func (mtdb *MemoryTaskDB) Enqueue(state *TaskDBTaskState, payload []byte) *MemoryWriteResult {
+func (mtdb *MemoryTaskDB) Enqueue(state *TaskDBTaskState, payload []byte) WriteResult {
 	mapID := mtdb.getMapID(state.Topic, state.ID)
 	mtdb.insertPayload(mapID, payload)
 	mtdb.insertTaskState(mapID, state)
@@ -69,7 +78,7 @@ func (mtdb *MemoryTaskDB) insertTaskState(mapID string, state *TaskDBTaskState) 
 	}
 }
 
-func (mtdb *MemoryTaskDB) PutState(state *TaskDBTaskState) *MemoryWriteResult {
+func (mtdb *MemoryTaskDB) PutState(state *TaskDBTaskState) WriteResult {
 	mtdb.insertTaskState(mtdb.getMapID(state.Topic, state.ID), state)
 	return &MemoryWriteResult{}
 }
@@ -85,7 +94,7 @@ func (mtdb *MemoryTaskDB) GetPayload(topicName, taskID string) ([]byte, error) {
 	return payload, nil
 }
 
-func (mtdb *MemoryTaskDB) Delete(topicName, taskID string) *MemoryWriteResult {
+func (mtdb *MemoryTaskDB) Delete(topicName, taskID string) WriteResult {
 	mapID := mtdb.getMapID(topicName, taskID)
 
 	mtdb.deletePayload(mapID)
@@ -106,7 +115,7 @@ func (mtdb *MemoryTaskDB) deleteTaskStates(mapID string) {
 	delete(mtdb.taskStateMap, mapID)
 }
 
-func (mtdb *MemoryTaskDB) Drain() *MemoryDrainIterator {
+func (mtdb *MemoryTaskDB) Drain() DrainIterator {
 	return &MemoryDrainIterator{}
 }
 

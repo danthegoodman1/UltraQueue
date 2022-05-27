@@ -21,7 +21,7 @@ var (
 type UltraQueue struct {
 	Partition string
 
-	TaskDB  *taskdb.TaskDB
+	TaskDB  taskdb.TaskDB
 	topics  map[string]*Topic
 	topicMu *sync.RWMutex
 
@@ -36,6 +36,10 @@ type UltraQueue struct {
 func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 	// Initialize taskdb based on config
 	// FIXME: Temporary in memory task db
+	taskDB, err := taskdb.NewMemoryTaskDB()
+	if err != nil {
+		return nil, fmt.Errorf("error creating new memory task db: %w", err)
+	}
 
 	uq := &UltraQueue{
 		Partition:      partition,
@@ -47,6 +51,7 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 		closeChan:      make(chan chan struct{}),
 		topics:         make(map[string]*Topic),
 		topicMu:        &sync.RWMutex{},
+		TaskDB:         taskDB,
 	}
 
 	// Start background inflight and delay tree scanner
