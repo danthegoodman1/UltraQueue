@@ -54,6 +54,45 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 		TaskDB:         taskDB,
 	}
 
+	// Attach TaskDB
+	s := time.Now()
+	attachIter := taskDB.Attach()
+	for {
+		tasks, err := attachIter.Next()
+		if tasks == nil && err == nil {
+			log.Debug().Str("partition", uq.Partition).Msg("Finished attach in " + time.Since(s).String())
+			break
+		} else if err != nil {
+			log.Fatal().Err(err).Msg("error attaching to taskdb")
+		}
+
+		// Process tasks
+		// TODO: Wait for write commits
+		results := make([]taskdb.WriteResult, 0)
+		for _, task := range tasks {
+			// Enqueue all tasks for now, maybe add per-state handling later
+			result := uq.enqueueTask(&Task{
+				ID:               task.ID,
+				Topic:            task.Topic,
+				Payload:          nil,
+				CreatedAt:        task.CreatedAt,
+				Version:          task.Version,
+				DeliveryAttempts: task.DeliveryAttempts,
+				Priority:         task.Priority,
+			})
+			results = append(results, result)
+		}
+
+		// Wait for all of the write results
+		for _, result := range results {
+			err := result.Get()
+			if err != nil {
+				// We need to fail because now we have it enqueued locally but not in the remote db
+				return nil, fmt.Errorf("error waiting for write result: %w", err)
+			}
+		}
+	}
+
 	// Start background inflight and delay tree scanner
 	go uq.pollDelayAndInFlightTrees(time.NewTicker(time.Millisecond * 200))
 
@@ -73,7 +112,6 @@ func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, d
 		task := NewTask(topicName, uq.Partition, payload, priority)
 
 		// Insert task payload
-		// TODO: Wait for commit
 		uq.TaskDB.PutPayload(task.Topic, task.ID, payload)
 
 		// Strip the payload so we don't store it in the topic
@@ -84,6 +122,7 @@ func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, d
 		} else {
 			uq.enqueueTask(task)
 		}
+		// TODO: Wait for commits
 	}
 
 	// TODO: Increment enqueue metric
