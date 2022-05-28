@@ -21,7 +21,7 @@ var (
 type UltraQueue struct {
 	Partition string
 
-	TaskDB  *taskdb.TaskDB
+	TaskDB  taskdb.TaskDB
 	topics  map[string]*Topic
 	topicMu *sync.RWMutex
 
@@ -34,7 +34,12 @@ type UltraQueue struct {
 }
 
 func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
-	// TODO: Initialize taskdb
+	// Initialize taskdb based on config
+	// FIXME: Temporary in memory task db
+	taskDB, err := taskdb.NewMemoryTaskDB()
+	if err != nil {
+		return nil, fmt.Errorf("error creating new memory task db: %w", err)
+	}
 
 	uq := &UltraQueue{
 		Partition:      partition,
@@ -46,6 +51,7 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 		closeChan:      make(chan chan struct{}),
 		topics:         make(map[string]*Topic),
 		topicMu:        &sync.RWMutex{},
+		TaskDB:         taskDB,
 	}
 
 	// Start background inflight and delay tree scanner
@@ -66,7 +72,12 @@ func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, d
 	for _, topicName := range topics {
 		task := NewTask(topicName, uq.Partition, payload, priority)
 
-		// TODO: Insert task into task DB task table
+		// Insert task payload
+		// TODO: Wait for commit
+		uq.TaskDB.PutPayload(task.Topic, task.ID, payload)
+
+		// Strip the payload so we don't store it in the topic
+		task.Payload = []byte{}
 
 		if delaySeconds > 0 {
 			uq.enqueueDelayedTask(task, delaySeconds)
@@ -81,14 +92,32 @@ func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, d
 
 func (uq *UltraQueue) Dequeue(topicName string, numTasks, inFlightTTLSeconds int32) (tasks []*InTreeTask, err error) {
 	// Get numTasks from the topic
-	tasks, err = uq.dequeueTask(topicName, numTasks, inFlightTTLSeconds)
+	dequeuedTasks, err := uq.dequeueTask(topicName, numTasks, inFlightTTLSeconds)
 	if err != nil {
 		log.Error().Err(err).Msg("Error dequeuing task")
-		return
+		return nil, err
 	}
 
-	for _, task := range tasks {
-		task.Task.DeliveryAttempts++
+	// Get task payloads
+	for _, task := range dequeuedTasks {
+		payload, err := uq.TaskDB.GetPayload(topicName, task.Task.ID)
+		if err != nil {
+			// TODO: Handle this properly
+			log.Error().Err(err).Str("partition", uq.Partition).Str("topicName", topicName).Str("taskID", task.Task.ID).Msg("failed to get task payload")
+		}
+		// Create a new task going out so we can assign the payload without storing it
+		tasks = append(tasks, &InTreeTask{
+			TreeID: task.TreeID,
+			Task: &Task{
+				ID:               task.Task.ID,
+				Topic:            task.Task.Topic,
+				Payload:          payload,
+				CreatedAt:        task.Task.CreatedAt,
+				Version:          task.Task.Version,
+				DeliveryAttempts: task.Task.DeliveryAttempts,
+				Priority:         task.Task.Priority,
+			},
+		})
 	}
 
 	// TODO: Increment dequeue metric
@@ -96,14 +125,14 @@ func (uq *UltraQueue) Dequeue(topicName string, numTasks, inFlightTTLSeconds int
 }
 
 func (uq *UltraQueue) Ack(inFlightTaskID string) (err error) {
-	// TODO: delete task from DB
-	// TODO: delete task states from DB
-
 	// Check if in the in-flight tree
-	deleted := uq.ack(inFlightTaskID)
+	topicName, taskID, deleted := uq.ack(inFlightTaskID)
 	if !deleted {
 		return ErrNotFoundInFlight
 	}
+	// Delete from TaskDB
+	uq.TaskDB.Delete(topicName, taskID)
+	// TODO: optionally wait for commit?
 
 	// TODO: Increment ack metric
 	return nil
@@ -121,22 +150,45 @@ func (uq *UltraQueue) Nack(inFlightTaskID string, delaySeconds int32) (err error
 	return
 }
 
-func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int32) error {
+func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int32) taskdb.WriteResult {
+
 	treeID := task.genTimeTreeID(task.CreatedAt.Add(time.Second * time.Duration(delaySeconds)))
 	treeTask := NewInTreeTask(treeID, task)
 
-	// TODO: Add task state to DB
+	// Add task state to DB
+	wr := uq.TaskDB.PutState(&taskdb.TaskDBTaskState{
+		Topic:            task.Topic,
+		Partition:        uq.Partition,
+		ID:               task.ID,
+		State:            taskdb.TASK_STATE_DELAYED,
+		Version:          task.Version,
+		DeliveryAttempts: task.DeliveryAttempts,
+		CreatedAt:        task.CreatedAt,
+		Priority:         task.Priority,
+	})
+	// TODO: Wait for commit, Optionally MUST
 
 	uq.delayTreeMu.Lock()
 	defer uq.delayTreeMu.Unlock()
 
 	uq.delayTree.ReplaceOrInsert(treeTask)
-	return nil
+	return wr
 }
 
-func (uq *UltraQueue) enqueueTask(task *Task) error {
+func (uq *UltraQueue) enqueueTask(task *Task) taskdb.WriteResult {
 	log.Debug().Str("partition", uq.Partition).Str("topic", task.Topic).Msg("Enqueuing topic")
-	// TODO: Add task state to DB
+	// Add task state to DB
+	wr := uq.TaskDB.PutState(&taskdb.TaskDBTaskState{
+		Topic:            task.Topic,
+		Partition:        uq.Partition,
+		ID:               task.ID,
+		State:            taskdb.TASK_STATE_ENQUEUED,
+		Version:          task.Version,
+		DeliveryAttempts: task.DeliveryAttempts,
+		CreatedAt:        task.CreatedAt,
+		Priority:         task.Priority,
+	})
+	// TODO: Wait for ack, Optionally MUST
 
 	// Add to topic outbox tree
 	topic := uq.getSafeTopic(task.Topic)
@@ -150,18 +202,16 @@ func (uq *UltraQueue) enqueueTask(task *Task) error {
 		Task:   task,
 	})
 
-	return nil
+	return wr
 }
 
 func (uq *UltraQueue) dequeueTask(topicName string, numTasks, inFlightTTLSeconds int32) (tasks []*InTreeTask, err error) {
 	log.Debug().Str("partition", uq.Partition).Str("topic", topicName).Msg("Dequeueing topic")
-	// TODO: Add task state to DB
 
 	dequeueTime := time.Now()
 
 	topic := uq.getSafeTopic(topicName)
 	if topic == nil {
-		// TODO: Check if another partition has the topic, and get it
 		return nil, nil
 	}
 
@@ -171,8 +221,22 @@ func (uq *UltraQueue) dequeueTask(topicName string, numTasks, inFlightTTLSeconds
 	// Get tasks and add to inflight tree
 	inTreeTasks := topic.Dequeue(numTasks)
 	for _, itt := range inTreeTasks {
+		itt.Task.DeliveryAttempts++
 		itt.TreeID = itt.Task.genExternalID(uq.Partition, dequeueTime.Add(time.Second*time.Duration(inFlightTTLSeconds)))
 		tasks = append(tasks, itt)
+		// Add task state to DB
+		uq.TaskDB.PutState(&taskdb.TaskDBTaskState{
+			Topic:            itt.Task.Topic,
+			Partition:        uq.Partition,
+			ID:               itt.Task.ID,
+			State:            taskdb.TASK_STATE_INFLIGHT,
+			Version:          itt.Task.Version,
+			DeliveryAttempts: itt.Task.DeliveryAttempts,
+			CreatedAt:        itt.Task.CreatedAt,
+			Priority:         itt.Task.Priority,
+		})
+		// TODO: Wait for commit? Probably not needed
+
 		uq.inFlightTree.ReplaceOrInsert(itt)
 	}
 
@@ -290,7 +354,7 @@ func (uq *UltraQueue) expireInFlightTasks(t time.Time) {
 }
 
 // Removes from the in-flight tree, returns whether the task existed
-func (uq *UltraQueue) ack(inTreeTaskID string) bool {
+func (uq *UltraQueue) ack(inTreeTaskID string) (topic, taskID string, deleted bool) {
 	uq.inFlightTreeMu.Lock()
 	defer uq.inFlightTreeMu.Unlock()
 
@@ -307,10 +371,12 @@ func (uq *UltraQueue) ack(inTreeTaskID string) bool {
 		return false
 	})
 	if foundTask != nil {
+		// Delete from inflight tree
 		uq.inFlightTree.Delete(foundTask)
-		return true
+
+		return foundTask.Task.Topic, foundTask.Task.ID, true
 	} else {
-		return false
+		return "", "", false
 	}
 }
 
@@ -333,20 +399,26 @@ func (uq *UltraQueue) nack(inTreeTaskID string, delaySeconds int32) bool {
 	if foundTask != nil {
 		uq.inFlightTree.Delete(foundTask)
 		if delaySeconds > 0 {
-			// Update time id
-			foundTask.TreeID = foundTask.Task.genTimeTreeID(time.Now().Add(time.Second * time.Duration(delaySeconds)))
-			// Put in delay tree
-			uq.delayTreeMu.Lock()
-			defer uq.delayTreeMu.Unlock()
-			uq.delayTree.ReplaceOrInsert(foundTask)
+			// // Update time id
+			// foundTask.TreeID = foundTask.Task.genTimeTreeID(time.Now().Add(time.Second * time.Duration(delaySeconds)))
+			// // Put in delay tree
+			// uq.delayTreeMu.Lock()
+			// defer uq.delayTreeMu.Unlock()
+			// uq.delayTree.ReplaceOrInsert(foundTask)
+
+			uq.enqueueDelayedTask(foundTask.Task, delaySeconds)
+
 		} else {
-			// Put in topic
-			topic := uq.getSafeTopic(foundTask.Task.Topic)
-			if topic == nil {
-				// Create if it doesn't exist
-				topic = uq.putSafeTopic(foundTask.Task.Topic)
-			}
-			topic.Enqueue(NewInTreeTask(foundTask.Task.genPriorityTreeID(), foundTask.Task))
+			// // Put in topic
+			// topic := uq.getSafeTopic(foundTask.Task.Topic)
+			// if topic == nil {
+			// 	// Create if it doesn't exist
+			// 	topic = uq.putSafeTopic(foundTask.Task.Topic)
+			// }
+			// topic.Enqueue(NewInTreeTask(foundTask.Task.genPriorityTreeID(), foundTask.Task))
+
+			uq.enqueueTask(foundTask.Task)
+
 		}
 		return true
 	} else {

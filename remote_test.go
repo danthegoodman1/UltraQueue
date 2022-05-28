@@ -103,7 +103,7 @@ func TestRemoteAck(t *testing.T) {
 	// ---------------------------------------------------------------------------
 
 	// Enqueue a message on node 1
-	err = uq1.Enqueue([]string{"topic1", "topic2"}, nil, 3, 0)
+	err = uq1.Enqueue([]string{"topic1", "topic2"}, []byte("hey this is a payload"), 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestRemoteNack(t *testing.T) {
 	// ---------------------------------------------------------------------------
 
 	// Enqueue a message on node 1
-	err = uq1.Enqueue([]string{"topic1", "topic2"}, nil, 3, 0)
+	err = uq1.Enqueue([]string{"topic1", "topic2"}, []byte("hey this is a payload"), 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +397,7 @@ func TestRemoteDequeue(t *testing.T) {
 	// ---------------------------------------------------------------------------
 
 	// Enqueue a message on node 1
-	err = uq1.Enqueue([]string{"topic1", "topic2"}, nil, 3, 0)
+	err = uq1.Enqueue([]string{"topic1", "topic2"}, []byte("hey this is a payload"), 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
