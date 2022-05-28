@@ -37,15 +37,16 @@ type DiskKVWriteResult struct{}
 
 func (ai *DiskKVAttachIterator) Next() ([]*TaskDBTaskState, error) {
 	buf := make([]*TaskDBTaskState, 0)
-	// Read up to 100 items
 	for {
 		state, open := <-ai.feed
 		if open {
 			buf = append(buf, state)
 			if len(buf) >= 100 {
+				// Read up to 100 items
 				return buf, nil
 			}
 		} else if len(ai.feed) > 0 {
+			// Just dump the rest
 			for state := range ai.feed {
 				buf = append(buf, state)
 			}
