@@ -39,20 +39,13 @@ func (ai *DiskKVAttachIterator) Next() ([]*TaskDBTaskState, error) {
 	buf := make([]*TaskDBTaskState, 0)
 	for {
 		state, open := <-ai.feed
-		if open {
-			buf = append(buf, state)
-			if len(buf) >= 100 {
-				// Read up to 100 items
-				return buf, nil
-			}
-		} else if len(ai.feed) > 0 {
-			// Just dump the rest
-			for state := range ai.feed {
-				buf = append(buf, state)
-			}
-			return buf, nil
-		} else if !open {
+		if !open {
 			return nil, nil
+		}
+		buf = append(buf, state)
+		if len(buf) >= 100 {
+			// Read up to 100 items
+			return buf, nil
 		}
 	}
 }
@@ -142,6 +135,18 @@ func attachLoad(ai *DiskKVAttachIterator) {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 		buf := make([]*TaskDBTaskState, 0)
+		// for i := 0; i < 200; i++ {
+		// 	buf = append(buf, &TaskDBTaskState{
+		// 		Topic:            "test",
+		// 		Partition:        "test",
+		// 		ID:               "test",
+		// 		State:            TASK_STATE_DELAYED,
+		// 		Version:          1,
+		// 		DeliveryAttempts: 1,
+		// 		CreatedAt:        time.Now(),
+		// 		Priority:         1,
+		// 	})
+		// }
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 			err := item.Value(func(val []byte) error {

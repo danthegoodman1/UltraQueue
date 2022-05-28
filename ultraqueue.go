@@ -59,6 +59,7 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 	attachIter := taskDB.Attach()
 	for {
 		tasks, err := attachIter.Next()
+		// fmt.Println("taskls: ", len(tasks))
 		if len(tasks) == 0 && err == nil {
 			log.Debug().Str("partition", uq.Partition).Msg("Finished attach in " + time.Since(s).String())
 			break
