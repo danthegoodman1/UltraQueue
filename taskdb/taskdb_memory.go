@@ -52,7 +52,7 @@ func (mtdb *MemoryTaskDB) Attach() AttachIterator {
 	return &FakeAttachIterator{}
 }
 
-func (mtdb *MemoryTaskDB) Enqueue(topicName, taskID string, payload []byte) WriteResult {
+func (mtdb *MemoryTaskDB) PutPayload(topicName, taskID string, payload []byte) WriteResult {
 	mapID := mtdb.getMapID(topicName, taskID)
 	mtdb.insertPayload(mapID, payload)
 	return &MemoryWriteResult{}

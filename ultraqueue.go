@@ -74,7 +74,7 @@ func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, d
 
 		// Insert task payload
 		// TODO: Wait for commit
-		uq.TaskDB.Enqueue(task.Topic, task.ID, payload)
+		uq.TaskDB.PutPayload(task.Topic, task.ID, payload)
 
 		// Strip the payload so we don't store it in the topic
 		task.Payload = []byte{}
@@ -169,7 +169,7 @@ func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int32) error {
 		CreatedAt:        task.CreatedAt,
 		Priority:         task.Priority,
 	})
-	// TODO: Wait for commit
+	// TODO: Wait for commit, Optionally MUST
 
 	uq.delayTreeMu.Lock()
 	defer uq.delayTreeMu.Unlock()
@@ -191,7 +191,7 @@ func (uq *UltraQueue) enqueueTask(task *Task) error {
 		CreatedAt:        task.CreatedAt,
 		Priority:         task.Priority,
 	})
-	// TODO: Wait for ack
+	// TODO: Wait for ack, Optionally MUST
 
 	// Add to topic outbox tree
 	topic := uq.getSafeTopic(task.Topic)
@@ -239,7 +239,7 @@ func (uq *UltraQueue) dequeueTask(topicName string, numTasks, inFlightTTLSeconds
 			CreatedAt:        itt.Task.CreatedAt,
 			Priority:         itt.Task.Priority,
 		})
-		// TODO: Wait for commit
+		// TODO: Wait for commit? Probably not needed
 
 		uq.inFlightTree.ReplaceOrInsert(itt)
 	}

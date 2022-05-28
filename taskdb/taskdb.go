@@ -7,7 +7,7 @@ type TaskDB interface {
 	Attach() AttachIterator
 
 	// A Task will be inserted into the task table, and its first state inserted
-	Enqueue(topicName, taskID string, payload []byte) WriteResult
+	PutPayload(topicName, taskID string, payload []byte) WriteResult
 
 	// A new task state
 	PutState(state *TaskDBTaskState) WriteResult
