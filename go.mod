@@ -3,6 +3,7 @@ module github.com/danthegoodman1/UltraQueue
 go 1.18
 
 require (
+	github.com/davecgh/go-spew v1.1.1
 	github.com/go-playground/validator/v10 v10.11.0
 	github.com/google/btree v1.0.1
 	github.com/hashicorp/memberlist v0.3.1

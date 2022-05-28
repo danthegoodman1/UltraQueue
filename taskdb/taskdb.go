@@ -7,7 +7,7 @@ type TaskDB interface {
 	Attach() AttachIterator
 
 	// A Task will be inserted into the task table, and its first state inserted
-	Enqueue(state *TaskDBTaskState, payload []byte) WriteResult
+	Enqueue(topicName, taskID string, payload []byte) WriteResult
 
 	// A new task state
 	PutState(state *TaskDBTaskState) WriteResult
@@ -28,13 +28,13 @@ type TaskDBTaskState struct {
 
 	ID               string
 	State            TaskState
-	Version          int
-	DeliveryAttempts int
+	Version          int32
+	DeliveryAttempts int32
 	CreatedAt        time.Time
-	Priority         int
+	Priority         int32
 }
 
-func NewTaskDBTaskState(partition, topicName, taskID string, state TaskState, version, deliveryAttempts, priority int, createdAt time.Time) *TaskDBTaskState {
+func NewTaskDBTaskState(partition, topicName, taskID string, state TaskState, version, deliveryAttempts, priority int32, createdAt time.Time) *TaskDBTaskState {
 	return &TaskDBTaskState{
 		Topic:            topicName,
 		Partition:        partition,

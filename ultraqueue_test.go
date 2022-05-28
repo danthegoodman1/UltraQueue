@@ -187,7 +187,7 @@ func TestAck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = uq.Enqueue([]string{"topic1", "topic2"}, nil, 3, 0)
+	err = uq.Enqueue([]string{"topic1", "topic2"}, []byte("hey this is a payload"), 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestAck(t *testing.T) {
 		t.Fatal("Did not get a task")
 	}
 
-	t.Log("Acking", tasks[0].TreeID)
+	t.Logf("Acking task %+v %+v", tasks[0], tasks[0].Task.Payload)
 	err = uq.Ack(tasks[0].TreeID)
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func TestNack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = uq.Enqueue([]string{"topic1", "topic2"}, nil, 3, 0)
+	err = uq.Enqueue([]string{"topic1", "topic2"}, []byte("hey this is a payload"), 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func TestNack(t *testing.T) {
 		t.Fatal("Did not get a task")
 	}
 
-	t.Log("Nacking", tasks[0].TreeID)
+	t.Logf("Nacking task %+v %+v", tasks[0], tasks[0].Task.Payload)
 	err = uq.Nack(tasks[0].TreeID, 0)
 	if err != nil {
 		t.Fatal(err)
