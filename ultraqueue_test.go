@@ -11,7 +11,7 @@ func TestEnqueueDequeue(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = uq.enqueueTask(&Task{
+	uq.enqueueTask(&Task{
 		ID:               "test_task",
 		Topic:            "test_topic",
 		Payload:          nil,
@@ -77,7 +77,7 @@ func TestEnqueueDequeue(t *testing.T) {
 		t.Fatal("Missing tasks from test_topic")
 	}
 
-	err = uq.enqueueTask(&Task{
+	uq.enqueueTask(&Task{
 		ID:               "test_task-2",
 		Topic:            "test_topic",
 		Payload:          nil,
@@ -90,7 +90,7 @@ func TestEnqueueDequeue(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = uq.enqueueTask(&Task{
+	uq.enqueueTask(&Task{
 		ID:               "test_task-3",
 		Topic:            "test_topic",
 		Payload:          nil,
@@ -123,7 +123,7 @@ func TestDelayedEnqueue(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = uq.enqueueDelayedTask(&Task{
+	uq.enqueueDelayedTask(&Task{
 		ID:               "test_task",
 		Topic:            "test_topic",
 		Payload:          nil,
