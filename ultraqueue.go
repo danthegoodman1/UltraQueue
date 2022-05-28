@@ -125,9 +125,6 @@ func (uq *UltraQueue) Dequeue(topicName string, numTasks, inFlightTTLSeconds int
 }
 
 func (uq *UltraQueue) Ack(inFlightTaskID string) (err error) {
-	// TODO: delete task from DB
-	// TODO: delete task states from DB
-
 	// Check if in the in-flight tree
 	topicName, taskID, deleted := uq.ack(inFlightTaskID)
 	if !deleted {
@@ -215,7 +212,6 @@ func (uq *UltraQueue) dequeueTask(topicName string, numTasks, inFlightTTLSeconds
 
 	topic := uq.getSafeTopic(topicName)
 	if topic == nil {
-		// TODO: Check if another partition has the topic, and get it
 		return nil, nil
 	}
 
