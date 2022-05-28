@@ -83,11 +83,11 @@ func (tdb *DiskKVTaskDB) PutPayload(topicName, taskID string, payload []byte) Wr
 }
 
 func (tdb *DiskKVTaskDB) insertPayload(mapID string, payload []byte) {
-
+	fmt.Println("inserting payload")
 }
 
 func (tdb *DiskKVTaskDB) insertTaskState(mapID string, state *TaskDBTaskState) {
-
+	fmt.Println("inserting state")
 }
 
 func (tdb *DiskKVTaskDB) PutState(state *TaskDBTaskState) WriteResult {

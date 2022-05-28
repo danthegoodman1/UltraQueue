@@ -191,11 +191,11 @@ func (uq *UltraQueue) Nack(inFlightTaskID string, delaySeconds int32) (err error
 }
 
 func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int32) taskdb.WriteResult {
-
 	treeID := task.genTimeTreeID(task.CreatedAt.Add(time.Second * time.Duration(delaySeconds)))
 	treeTask := NewInTreeTask(treeID, task)
 
 	// Add task state to DB
+	task.Version++
 	wr := uq.TaskDB.PutState(&taskdb.TaskDBTaskState{
 		Topic:            task.Topic,
 		Partition:        uq.Partition,
@@ -218,6 +218,7 @@ func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int32) taskdb.
 func (uq *UltraQueue) enqueueTask(task *Task) taskdb.WriteResult {
 	log.Debug().Str("partition", uq.Partition).Str("topic", task.Topic).Msg("Enqueuing topic")
 	// Add task state to DB
+	task.Version++
 	wr := uq.TaskDB.PutState(&taskdb.TaskDBTaskState{
 		Topic:            task.Topic,
 		Partition:        uq.Partition,
@@ -265,6 +266,7 @@ func (uq *UltraQueue) dequeueTask(topicName string, numTasks, inFlightTTLSeconds
 		itt.TreeID = itt.Task.genExternalID(uq.Partition, dequeueTime.Add(time.Second*time.Duration(inFlightTTLSeconds)))
 		tasks = append(tasks, itt)
 		// Add task state to DB
+		itt.Task.Version++
 		uq.TaskDB.PutState(&taskdb.TaskDBTaskState{
 			Topic:            itt.Task.Topic,
 			Partition:        uq.Partition,

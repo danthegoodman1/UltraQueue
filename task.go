@@ -34,7 +34,7 @@ func NewTask(topic, partition string, payload []byte, priority int32) *Task {
 		ID:               genRandomID(),
 		Payload:          payload,
 		CreatedAt:        now,
-		Version:          1,
+		Version:          0,
 		DeliveryAttempts: 0,
 		Priority:         priority,
 	}
