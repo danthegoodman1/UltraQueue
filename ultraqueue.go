@@ -36,7 +36,7 @@ type UltraQueue struct {
 func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 	// Initialize taskdb based on config
 	// FIXME: Temporary in memory task db
-	taskDB, err := taskdb.NewMemoryTaskDB()
+	taskDB, err := taskdb.NewDiskKVTaskDB()
 	if err != nil {
 		return nil, fmt.Errorf("error creating new memory task db: %w", err)
 	}
@@ -59,7 +59,7 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 	attachIter := taskDB.Attach()
 	for {
 		tasks, err := attachIter.Next()
-		if tasks == nil && err == nil {
+		if len(tasks) == 0 && err == nil {
 			log.Debug().Str("partition", uq.Partition).Msg("Finished attach in " + time.Since(s).String())
 			break
 		} else if err != nil {

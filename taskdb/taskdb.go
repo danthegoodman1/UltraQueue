@@ -1,6 +1,13 @@
 package taskdb
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var (
+	ErrAttachEnded = errors.New("attach ended")
+)
 
 type TaskDB interface {
 	// Acquires the TaskDB lock as needed, then returns an AttachIterator
