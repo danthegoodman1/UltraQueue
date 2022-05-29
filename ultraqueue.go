@@ -36,6 +36,7 @@ type UltraQueue struct {
 func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 	// Initialize taskdb based on config
 	// FIXME: Temporary in memory task db
+	// taskDB, err := taskdb.NewMemoryTaskDB()
 	taskDB, err := taskdb.NewDiskKVTaskDB()
 	if err != nil {
 		return nil, fmt.Errorf("error creating new memory task db: %w", err)
@@ -75,7 +76,7 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 			result := uq.enqueueTask(&Task{
 				ID:               task.ID,
 				Topic:            task.Topic,
-				Payload:          nil,
+				Payload:          "",
 				CreatedAt:        task.CreatedAt,
 				Version:          task.Version,
 				DeliveryAttempts: task.DeliveryAttempts,
@@ -108,7 +109,7 @@ func (uq *UltraQueue) Shutdown() {
 	log.Info().Str("partition", uq.Partition).Msg("Shut down ultra queue")
 }
 
-func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, delaySeconds int32) error {
+func (uq *UltraQueue) Enqueue(topics []string, payload string, priority int32, delaySeconds int32) error {
 	for _, topicName := range topics {
 		task := NewTask(topicName, uq.Partition, payload, priority)
 
@@ -116,7 +117,7 @@ func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, d
 		payloadResult := uq.TaskDB.PutPayload(task.Topic, task.ID, payload)
 
 		// Strip the payload so we don't store it in the topic
-		task.Payload = []byte{}
+		task.Payload = ""
 
 		var stateResult taskdb.WriteResult
 		if delaySeconds > 0 {

@@ -14,7 +14,7 @@ func TestEnqueueDequeue(t *testing.T) {
 	uq.enqueueTask(&Task{
 		ID:               "test_task",
 		Topic:            "test_topic",
-		Payload:          nil,
+		Payload:          "",
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -45,7 +45,7 @@ func TestEnqueueDequeue(t *testing.T) {
 	uq.enqueueTask(&Task{
 		ID:               "test_task-2",
 		Topic:            "test_topic",
-		Payload:          nil,
+		Payload:          "",
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -58,7 +58,7 @@ func TestEnqueueDequeue(t *testing.T) {
 	uq.enqueueTask(&Task{
 		ID:               "test_task-3",
 		Topic:            "test_topic",
-		Payload:          nil,
+		Payload:          "",
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -80,7 +80,7 @@ func TestEnqueueDequeue(t *testing.T) {
 	uq.enqueueTask(&Task{
 		ID:               "test_task-2",
 		Topic:            "test_topic",
-		Payload:          nil,
+		Payload:          "",
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -93,7 +93,7 @@ func TestEnqueueDequeue(t *testing.T) {
 	uq.enqueueTask(&Task{
 		ID:               "test_task-3",
 		Topic:            "test_topic",
-		Payload:          nil,
+		Payload:          "",
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -126,7 +126,7 @@ func TestDelayedEnqueue(t *testing.T) {
 	uq.enqueueDelayedTask(&Task{
 		ID:               "test_task",
 		Topic:            "test_topic",
-		Payload:          nil,
+		Payload:          "",
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -187,7 +187,7 @@ func TestAck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = uq.Enqueue([]string{"topic1", "topic2"}, []byte("hey this is a payload"), 3, 0)
+	err = uq.Enqueue([]string{"topic1", "topic2"}, "hey this is a payload", 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +209,8 @@ func TestAck(t *testing.T) {
 	if len(tasks) != 1 {
 		t.Fatal("Did not get a task")
 	}
+
+	t.Log(tasks)
 
 	t.Logf("Acking task %+v %+v", tasks[0], tasks[0].Task.Payload)
 	err = uq.Ack(tasks[0].TreeID)
@@ -249,7 +251,7 @@ func TestNack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = uq.Enqueue([]string{"topic1", "topic2"}, []byte("hey this is a payload"), 3, 0)
+	err = uq.Enqueue([]string{"topic1", "topic2"}, "hey this is a payload", 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,6 +280,8 @@ func TestNack(t *testing.T) {
 	if newTasks[0].Task.ID != tasks[0].Task.ID {
 		t.Fatal("Did not get task immediately after dequeue")
 	}
+
+	t.Log(newTasks)
 
 	// Test nack with delay
 	tasks, err = uq.Dequeue("topic1", 1, 2)

@@ -17,7 +17,7 @@ type Task struct {
 	ID    string
 	Topic string
 
-	Payload   []byte
+	Payload   string
 	CreatedAt time.Time
 
 	Version          int32
@@ -26,7 +26,7 @@ type Task struct {
 	Priority int32
 }
 
-func NewTask(topic, partition string, payload []byte, priority int32) *Task {
+func NewTask(topic, partition string, payload string, priority int32) *Task {
 	now := time.Now()
 
 	task := &Task{

@@ -59,8 +59,9 @@ func (di *DiskKVDrainIterator) Next() ([]*DrainTask, error) {
 }
 
 func (wr DiskKVWriteResult) Get() error {
-	err := <-wr.returnChan
-	return err
+	// err := <-wr.returnChan
+	// return err
+	return nil
 }
 
 func (tdb *DiskKVTaskDB) Attach() AttachIterator {
@@ -79,7 +80,7 @@ func (tdb *DiskKVTaskDB) Attach() AttachIterator {
 	return ai
 }
 
-func (tdb *DiskKVTaskDB) PutPayload(topicName, taskID string, payload []byte) WriteResult {
+func (tdb *DiskKVTaskDB) PutPayload(topicName, taskID string, payload string) WriteResult {
 	returnChan := make(chan error, 1)
 	go tdb.insertPayload(topicName, taskID, payload, returnChan)
 	return &DiskKVWriteResult{
@@ -88,10 +89,10 @@ func (tdb *DiskKVTaskDB) PutPayload(topicName, taskID string, payload []byte) Wr
 }
 
 // Launched in a goroutine, communicates through the returnChan
-func (tdb *DiskKVTaskDB) insertPayload(topicName, taskID string, payload []byte, returnChan chan error) {
+func (tdb *DiskKVTaskDB) insertPayload(topicName, taskID string, payload string, returnChan chan error) {
 	err := tdb.db.Update(func(txn *badger.Txn) error {
 		payloadID := tdb.genPayloadID(topicName, taskID)
-		err := txn.Set([]byte(payloadID), payload)
+		err := txn.Set([]byte(payloadID), []byte(payload))
 		if err != nil {
 			return fmt.Errorf("error setting payload: %w", err)
 		}
@@ -105,9 +106,9 @@ func (tdb *DiskKVTaskDB) PutState(state *TaskDBTaskState) WriteResult {
 	return &DiskKVWriteResult{}
 }
 
-func (tdb *DiskKVTaskDB) GetPayload(topicName, taskID string) ([]byte, error) {
+func (tdb *DiskKVTaskDB) GetPayload(topicName, taskID string) (string, error) {
 
-	return nil, nil
+	return "", nil
 }
 
 func (tdb *DiskKVTaskDB) Delete(topicName, taskID string) WriteResult {
