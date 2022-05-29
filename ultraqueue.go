@@ -113,17 +113,25 @@ func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, d
 		task := NewTask(topicName, uq.Partition, payload, priority)
 
 		// Insert task payload
-		uq.TaskDB.PutPayload(task.Topic, task.ID, payload)
+		payloadResult := uq.TaskDB.PutPayload(task.Topic, task.ID, payload)
 
 		// Strip the payload so we don't store it in the topic
 		task.Payload = []byte{}
 
+		var stateResult taskdb.WriteResult
 		if delaySeconds > 0 {
-			uq.enqueueDelayedTask(task, delaySeconds)
+			stateResult = uq.enqueueDelayedTask(task, delaySeconds)
 		} else {
-			uq.enqueueTask(task)
+			stateResult = uq.enqueueTask(task)
 		}
 		// TODO: Wait for commits
+		payloadErr, stateErr := payloadResult.Get(), stateResult.Get()
+		if payloadErr != nil {
+			return fmt.Errorf("error putting payload: %w", payloadErr)
+		}
+		if stateErr != nil {
+			return fmt.Errorf("error enqueueing: %w", stateErr)
+		}
 	}
 
 	// TODO: Increment enqueue metric
