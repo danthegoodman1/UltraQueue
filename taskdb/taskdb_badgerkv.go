@@ -8,36 +8,36 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-type DiskKVTaskDB struct {
+type BadgerTaskDB struct {
 	db *badger.DB
 }
 
-func NewDiskKVTaskDB() (*DiskKVTaskDB, error) {
+func NewBadgerTaskDB() (*BadgerTaskDB, error) {
 	// TODO: Get file location from config
 	bdb, err := badger.Open(badger.DefaultOptions("/tmp/badger"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open badger DB: %w", err)
 	}
-	return &DiskKVTaskDB{
+	return &BadgerTaskDB{
 		db: bdb,
 	}, nil
 }
 
-type DiskKVAttachIterator struct {
+type BadgerAttachIterator struct {
 	db       *badger.DB
 	feed     chan *TaskDBTaskState
 	doneChan chan struct{}
 }
 
-type DiskKVDrainIterator struct {
+type BadgerDrainIterator struct {
 	db *badger.DB
 }
 
-type DiskKVWriteResult struct {
+type BadgerWriteResult struct {
 	returnChan chan error
 }
 
-func (ai *DiskKVAttachIterator) Next() ([]*TaskDBTaskState, error) {
+func (ai *BadgerAttachIterator) Next() ([]*TaskDBTaskState, error) {
 	buf := make([]*TaskDBTaskState, 0)
 	for {
 		state, open := <-ai.feed
@@ -52,23 +52,23 @@ func (ai *DiskKVAttachIterator) Next() ([]*TaskDBTaskState, error) {
 	}
 }
 
-func (di *DiskKVDrainIterator) Next() ([]*DrainTask, error) {
+func (di *BadgerDrainIterator) Next() ([]*DrainTask, error) {
 	// TODO: Drain from map, release every X Y
 	di.db.Close()
 	return nil, nil
 }
 
-func (wr DiskKVWriteResult) Get() error {
+func (wr BadgerWriteResult) Get() error {
 	err := <-wr.returnChan
 	return err
 }
 
-func (tdb *DiskKVTaskDB) Attach() AttachIterator {
+func (tdb *BadgerTaskDB) Attach() AttachIterator {
 	// Start a transaction  goroutine
 	feedChan := make(chan *TaskDBTaskState, 1000) // extra buffer size
 	doneChan := make(chan struct{}, 1)
 
-	ai := &DiskKVAttachIterator{
+	ai := &BadgerAttachIterator{
 		db:       tdb.db,
 		feed:     feedChan,
 		doneChan: doneChan,
@@ -79,16 +79,16 @@ func (tdb *DiskKVTaskDB) Attach() AttachIterator {
 	return ai
 }
 
-func (tdb *DiskKVTaskDB) PutPayload(topicName, taskID string, payload string) WriteResult {
+func (tdb *BadgerTaskDB) PutPayload(topicName, taskID string, payload string) WriteResult {
 	returnChan := make(chan error, 1)
 	go tdb.insertPayload(topicName, taskID, payload, returnChan)
-	return &DiskKVWriteResult{
+	return &BadgerWriteResult{
 		returnChan: returnChan,
 	}
 }
 
 // Launched in a goroutine, communicates through the returnChan
-func (tdb *DiskKVTaskDB) insertPayload(topicName, taskID string, payload string, returnChan chan error) {
+func (tdb *BadgerTaskDB) insertPayload(topicName, taskID string, payload string, returnChan chan error) {
 	err := tdb.db.Update(func(txn *badger.Txn) error {
 		payloadID := tdb.genPayloadKey(topicName, taskID)
 		err := txn.Set([]byte(payloadID), []byte(payload))
@@ -100,15 +100,15 @@ func (tdb *DiskKVTaskDB) insertPayload(topicName, taskID string, payload string,
 	returnChan <- err
 }
 
-func (tdb *DiskKVTaskDB) PutState(state *TaskDBTaskState) WriteResult {
+func (tdb *BadgerTaskDB) PutState(state *TaskDBTaskState) WriteResult {
 	returnChan := make(chan error, 1)
 	go tdb.insertState(state, returnChan)
-	return &DiskKVWriteResult{
+	return &BadgerWriteResult{
 		returnChan: returnChan,
 	}
 }
 
-func (tdb *DiskKVTaskDB) insertState(state *TaskDBTaskState, returnChan chan error) {
+func (tdb *BadgerTaskDB) insertState(state *TaskDBTaskState, returnChan chan error) {
 	err := tdb.db.Update(func(txn *badger.Txn) error {
 		payloadID := tdb.genStateKey(state.Topic, state.ID)
 		b, err := tdb.taskStateToBytes(state)
@@ -124,7 +124,7 @@ func (tdb *DiskKVTaskDB) insertState(state *TaskDBTaskState, returnChan chan err
 	returnChan <- err
 }
 
-func (tdb *DiskKVTaskDB) GetPayload(topicName, taskID string) (payload string, err error) {
+func (tdb *BadgerTaskDB) GetPayload(topicName, taskID string) (payload string, err error) {
 	err = tdb.db.View(func(txn *badger.Txn) error {
 		payloadID := tdb.genPayloadKey(topicName, taskID)
 		item, err := txn.Get([]byte(payloadID))
@@ -139,14 +139,14 @@ func (tdb *DiskKVTaskDB) GetPayload(topicName, taskID string) (payload string, e
 	return
 }
 
-func (tdb *DiskKVTaskDB) Delete(topicName, taskID string) WriteResult {
+func (tdb *BadgerTaskDB) Delete(topicName, taskID string) WriteResult {
 	go tdb.deletePayload(topicName, taskID)
 	go tdb.deleteTaskStates(topicName, taskID)
 
-	return &DiskKVWriteResult{}
+	return &BadgerWriteResult{}
 }
 
-func (tdb *DiskKVTaskDB) deletePayload(topicName, taskID string) {
+func (tdb *BadgerTaskDB) deletePayload(topicName, taskID string) {
 	err := tdb.db.Update(func(txn *badger.Txn) error {
 		payloadID := tdb.genPayloadKey(topicName, taskID)
 		err := txn.Delete([]byte(payloadID))
@@ -160,7 +160,7 @@ func (tdb *DiskKVTaskDB) deletePayload(topicName, taskID string) {
 	}
 }
 
-func (tdb *DiskKVTaskDB) deleteTaskStates(topicName, taskID string) {
+func (tdb *BadgerTaskDB) deleteTaskStates(topicName, taskID string) {
 	err := tdb.db.Update(func(txn *badger.Txn) error {
 		payloadID := tdb.genStateKey(topicName, taskID)
 		err := txn.Delete([]byte(payloadID))
@@ -174,14 +174,14 @@ func (tdb *DiskKVTaskDB) deleteTaskStates(topicName, taskID string) {
 	}
 }
 
-func (tdb *DiskKVTaskDB) Drain() DrainIterator {
-	return &DiskKVDrainIterator{
+func (tdb *BadgerTaskDB) Drain() DrainIterator {
+	return &BadgerDrainIterator{
 		db: tdb.db,
 	}
 }
 
 // Launched in a goroutine, scans the rows and feeds a buffer into the feed chan
-func (tdb *DiskKVTaskDB) attachLoad(ai *DiskKVAttachIterator) {
+func (tdb *BadgerTaskDB) attachLoad(ai *BadgerAttachIterator) {
 	ai.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -240,15 +240,15 @@ func (tdb *DiskKVTaskDB) attachLoad(ai *DiskKVAttachIterator) {
 	close(ai.feed)
 }
 
-func (tdb *DiskKVTaskDB) genPayloadKey(topicName, taskID string) string {
+func (tdb *BadgerTaskDB) genPayloadKey(topicName, taskID string) string {
 	return fmt.Sprintf("%s_%s_pd", topicName, taskID)
 }
 
-func (tdb *DiskKVTaskDB) genStateKey(topicName, taskID string) string {
+func (tdb *BadgerTaskDB) genStateKey(topicName, taskID string) string {
 	return fmt.Sprintf("%s_%s_st", topicName, taskID)
 }
 
-func (tdb *DiskKVTaskDB) taskStateToBytes(state *TaskDBTaskState) ([]byte, error) {
+func (tdb *BadgerTaskDB) taskStateToBytes(state *TaskDBTaskState) ([]byte, error) {
 	b, err := msgpack.Marshal(state)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling task state: %w", err)
@@ -256,7 +256,7 @@ func (tdb *DiskKVTaskDB) taskStateToBytes(state *TaskDBTaskState) ([]byte, error
 	return b, nil
 }
 
-func (tdb *DiskKVTaskDB) bytesToTaskState(b []byte) (*TaskDBTaskState, error) {
+func (tdb *BadgerTaskDB) bytesToTaskState(b []byte) (*TaskDBTaskState, error) {
 	var state *TaskDBTaskState
 	err := msgpack.Unmarshal(b, &state)
 	if err != nil {

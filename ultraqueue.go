@@ -37,7 +37,7 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 	// Initialize taskdb based on config
 	// FIXME: Temporary in memory task db
 	// taskDB, err := taskdb.NewMemoryTaskDB()
-	taskDB, err := taskdb.NewDiskKVTaskDB()
+	taskDB, err := taskdb.NewBadgerTaskDB()
 	if err != nil {
 		return nil, fmt.Errorf("error creating new memory task db: %w", err)
 	}
