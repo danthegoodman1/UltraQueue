@@ -212,7 +212,7 @@ func TestAck(t *testing.T) {
 
 	t.Log(tasks)
 
-	t.Logf("Acking task %+v %+v", tasks[0], tasks[0].Task.Payload)
+	t.Logf("Acking task %+v, %+v", tasks[0], tasks[0].Task.Payload)
 	err = uq.Ack(tasks[0].TreeID)
 	if err != nil {
 		t.Fatal(err)
