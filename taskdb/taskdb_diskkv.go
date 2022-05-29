@@ -90,7 +90,7 @@ func (tdb *DiskKVTaskDB) PutPayload(topicName, taskID string, payload string) Wr
 // Launched in a goroutine, communicates through the returnChan
 func (tdb *DiskKVTaskDB) insertPayload(topicName, taskID string, payload string, returnChan chan error) {
 	err := tdb.db.Update(func(txn *badger.Txn) error {
-		payloadID := tdb.genTaskKey(topicName, taskID)
+		payloadID := tdb.genPayloadKey(topicName, taskID)
 		err := txn.Set([]byte(payloadID), []byte(payload))
 		if err != nil {
 			return fmt.Errorf("error setting payload: %w", err)
@@ -110,7 +110,7 @@ func (tdb *DiskKVTaskDB) PutState(state *TaskDBTaskState) WriteResult {
 
 func (tdb *DiskKVTaskDB) insertState(state *TaskDBTaskState, returnChan chan error) {
 	err := tdb.db.Update(func(txn *badger.Txn) error {
-		payloadID := tdb.genTaskKey(state.Topic, state.ID)
+		payloadID := tdb.genStateKey(state.Topic, state.ID)
 		b, err := tdb.taskStateToBytes(state)
 		if err != nil {
 			return fmt.Errorf("failed to convert state to bytes: %w", err)
@@ -126,7 +126,7 @@ func (tdb *DiskKVTaskDB) insertState(state *TaskDBTaskState, returnChan chan err
 
 func (tdb *DiskKVTaskDB) GetPayload(topicName, taskID string) (payload string, err error) {
 	err = tdb.db.View(func(txn *badger.Txn) error {
-		payloadID := tdb.genTaskKey(topicName, taskID)
+		payloadID := tdb.genPayloadKey(topicName, taskID)
 		item, err := txn.Get([]byte(payloadID))
 		if err != nil {
 			return fmt.Errorf("error getting task payload: %w", err)
@@ -140,19 +140,38 @@ func (tdb *DiskKVTaskDB) GetPayload(topicName, taskID string) (payload string, e
 }
 
 func (tdb *DiskKVTaskDB) Delete(topicName, taskID string) WriteResult {
-
-	tdb.deletePayload(topicName, taskID)
-	tdb.deleteTaskStates(topicName, taskID)
+	go tdb.deletePayload(topicName, taskID)
+	go tdb.deleteTaskStates(topicName, taskID)
 
 	return &DiskKVWriteResult{}
 }
 
 func (tdb *DiskKVTaskDB) deletePayload(topicName, taskID string) {
-	// If there are no more topics, delete, otherwise pop the topic
+	err := tdb.db.Update(func(txn *badger.Txn) error {
+		payloadID := tdb.genPayloadKey(topicName, taskID)
+		err := txn.Delete([]byte(payloadID))
+		if err != nil {
+			return fmt.Errorf("error deleting payload: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error().Err(err).Str("topic", topicName).Str("taskID", taskID).Msg("error deleting task payload")
+	}
 }
 
 func (tdb *DiskKVTaskDB) deleteTaskStates(topicName, taskID string) {
-
+	err := tdb.db.Update(func(txn *badger.Txn) error {
+		payloadID := tdb.genStateKey(topicName, taskID)
+		err := txn.Delete([]byte(payloadID))
+		if err != nil {
+			return fmt.Errorf("error setting state: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error().Err(err).Str("topic", topicName).Str("taskID", taskID).Msg("error deleting task state")
+	}
 }
 
 func (tdb *DiskKVTaskDB) Drain() DrainIterator {
@@ -163,8 +182,6 @@ func (tdb *DiskKVTaskDB) Drain() DrainIterator {
 
 // Launched in a goroutine, scans the rows and feeds a buffer into the feed chan
 func (tdb *DiskKVTaskDB) attachLoad(ai *DiskKVAttachIterator) {
-	// TODO: Remove log line
-	log.Debug().Msg("starting attach loader")
 	ai.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -223,8 +240,12 @@ func (tdb *DiskKVTaskDB) attachLoad(ai *DiskKVAttachIterator) {
 	close(ai.feed)
 }
 
-func (tdb *DiskKVTaskDB) genTaskKey(topicName, taskID string) string {
-	return fmt.Sprintf("%s_%s", topicName, taskID)
+func (tdb *DiskKVTaskDB) genPayloadKey(topicName, taskID string) string {
+	return fmt.Sprintf("%s_%s_pd", topicName, taskID)
+}
+
+func (tdb *DiskKVTaskDB) genStateKey(topicName, taskID string) string {
+	return fmt.Sprintf("%s_%s_st", topicName, taskID)
 }
 
 func (tdb *DiskKVTaskDB) taskStateToBytes(state *TaskDBTaskState) ([]byte, error) {
