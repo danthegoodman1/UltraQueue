@@ -14,7 +14,7 @@ type BadgerTaskDB struct {
 
 func NewBadgerTaskDB() (*BadgerTaskDB, error) {
 	// TODO: Get file location from config
-	bdb, err := badger.Open(badger.DefaultOptions("/tmp/badger"))
+	bdb, err := badger.Open(badger.DefaultOptions("./badger"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open badger DB: %w", err)
 	}
@@ -54,7 +54,6 @@ func (ai *BadgerAttachIterator) Next() ([]*TaskDBTaskState, error) {
 
 func (di *BadgerDrainIterator) Next() ([]*DrainTask, error) {
 	// TODO: Drain from map, release every X Y
-	di.db.Close()
 	return nil, nil
 }
 
@@ -175,6 +174,8 @@ func (tdb *BadgerTaskDB) deleteTaskStates(topicName, taskID string) {
 }
 
 func (tdb *BadgerTaskDB) Drain() DrainIterator {
+	// FIXME: This should only close after drain
+	tdb.db.Close()
 	return &BadgerDrainIterator{
 		db: tdb.db,
 	}
