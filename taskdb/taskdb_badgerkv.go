@@ -9,17 +9,23 @@ import (
 )
 
 type BadgerTaskDB struct {
-	db *badger.DB
+	payloadDB *badger.DB
+	stateDB   *badger.DB
 }
 
 func NewBadgerTaskDB() (*BadgerTaskDB, error) {
 	// TODO: Get file location from config
-	bdb, err := badger.Open(badger.DefaultOptions("./badger"))
+	pdb, err := badger.Open(badger.DefaultOptions("./badger_payload"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open badger DB: %w", err)
+	}
+	sdb, err := badger.Open(badger.DefaultOptions("./badger_states"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open badger DB: %w", err)
 	}
 	return &BadgerTaskDB{
-		db: bdb,
+		payloadDB: pdb,
+		stateDB:   sdb,
 	}, nil
 }
 
@@ -30,7 +36,8 @@ type BadgerAttachIterator struct {
 }
 
 type BadgerDrainIterator struct {
-	db *badger.DB
+	payloadDB *badger.DB
+	stateDB   *badger.DB
 }
 
 type BadgerWriteResult struct {
@@ -42,7 +49,7 @@ func (ai *BadgerAttachIterator) Next() ([]*TaskDBTaskState, error) {
 	for {
 		state, open := <-ai.feed
 		if !open {
-			return nil, nil
+			return buf, nil
 		}
 		buf = append(buf, state)
 		if len(buf) >= 100 {
@@ -68,7 +75,7 @@ func (tdb *BadgerTaskDB) Attach() AttachIterator {
 	doneChan := make(chan struct{}, 1)
 
 	ai := &BadgerAttachIterator{
-		db:       tdb.db,
+		db:       tdb.stateDB,
 		feed:     feedChan,
 		doneChan: doneChan,
 	}
@@ -88,7 +95,7 @@ func (tdb *BadgerTaskDB) PutPayload(topicName, taskID string, payload string) Wr
 
 // Launched in a goroutine, communicates through the returnChan
 func (tdb *BadgerTaskDB) insertPayload(topicName, taskID string, payload string, returnChan chan error) {
-	err := tdb.db.Update(func(txn *badger.Txn) error {
+	err := tdb.payloadDB.Update(func(txn *badger.Txn) error {
 		payloadID := tdb.genPayloadKey(topicName, taskID)
 		err := txn.Set([]byte(payloadID), []byte(payload))
 		if err != nil {
@@ -108,13 +115,13 @@ func (tdb *BadgerTaskDB) PutState(state *TaskDBTaskState) WriteResult {
 }
 
 func (tdb *BadgerTaskDB) insertState(state *TaskDBTaskState, returnChan chan error) {
-	err := tdb.db.Update(func(txn *badger.Txn) error {
-		payloadID := tdb.genStateKey(state.Topic, state.ID)
+	err := tdb.stateDB.Update(func(txn *badger.Txn) error {
+		stateID := tdb.genStateKey(state.Topic, state.ID)
 		b, err := tdb.taskStateToBytes(state)
 		if err != nil {
 			return fmt.Errorf("failed to convert state to bytes: %w", err)
 		}
-		err = txn.Set([]byte(payloadID), b)
+		err = txn.Set([]byte(stateID), b)
 		if err != nil {
 			return fmt.Errorf("error setting state: %w", err)
 		}
@@ -124,7 +131,7 @@ func (tdb *BadgerTaskDB) insertState(state *TaskDBTaskState, returnChan chan err
 }
 
 func (tdb *BadgerTaskDB) GetPayload(topicName, taskID string) (payload string, err error) {
-	err = tdb.db.View(func(txn *badger.Txn) error {
+	err = tdb.payloadDB.View(func(txn *badger.Txn) error {
 		payloadID := tdb.genPayloadKey(topicName, taskID)
 		item, err := txn.Get([]byte(payloadID))
 		if err != nil {
@@ -146,7 +153,7 @@ func (tdb *BadgerTaskDB) Delete(topicName, taskID string) WriteResult {
 }
 
 func (tdb *BadgerTaskDB) deletePayload(topicName, taskID string) {
-	err := tdb.db.Update(func(txn *badger.Txn) error {
+	err := tdb.payloadDB.Update(func(txn *badger.Txn) error {
 		payloadID := tdb.genPayloadKey(topicName, taskID)
 		err := txn.Delete([]byte(payloadID))
 		if err != nil {
@@ -160,9 +167,9 @@ func (tdb *BadgerTaskDB) deletePayload(topicName, taskID string) {
 }
 
 func (tdb *BadgerTaskDB) deleteTaskStates(topicName, taskID string) {
-	err := tdb.db.Update(func(txn *badger.Txn) error {
-		payloadID := tdb.genStateKey(topicName, taskID)
-		err := txn.Delete([]byte(payloadID))
+	err := tdb.stateDB.Update(func(txn *badger.Txn) error {
+		stateID := tdb.genStateKey(topicName, taskID)
+		err := txn.Delete([]byte(stateID))
 		if err != nil {
 			return fmt.Errorf("error setting state: %w", err)
 		}
@@ -174,16 +181,19 @@ func (tdb *BadgerTaskDB) deleteTaskStates(topicName, taskID string) {
 }
 
 func (tdb *BadgerTaskDB) Drain() DrainIterator {
-	// FIXME: This should only close after drain
-	tdb.db.Close()
+	tdb.payloadDB.DropAll()
+	tdb.stateDB.DropAll()
+	tdb.payloadDB.Close()
+	tdb.stateDB.Close()
 	return &BadgerDrainIterator{
-		db: tdb.db,
+		payloadDB: tdb.payloadDB,
+		stateDB:   tdb.stateDB,
 	}
 }
 
 // Launched in a goroutine, scans the rows and feeds a buffer into the feed chan
 func (tdb *BadgerTaskDB) attachLoad(ai *BadgerAttachIterator) {
-	ai.db.View(func(txn *badger.Txn) error {
+	err := ai.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 		buf := make([]*TaskDBTaskState, 0)
@@ -238,6 +248,9 @@ func (tdb *BadgerTaskDB) attachLoad(ai *BadgerAttachIterator) {
 		}
 		return nil
 	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to iterate")
+	}
 	close(ai.feed)
 }
 

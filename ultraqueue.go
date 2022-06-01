@@ -155,6 +155,7 @@ func (uq *UltraQueue) Dequeue(topicName string, numTasks, inFlightTTLSeconds int
 		if err != nil {
 			// TODO: Handle this properly
 			log.Error().Err(err).Str("partition", uq.Partition).Str("topicName", topicName).Str("taskID", task.Task.ID).Msg("failed to get task payload")
+			return nil, fmt.Errorf("failed to get task payload: %w", err)
 		}
 		// Create a new task going out so we can assign the payload without storing it
 		tasks = append(tasks, &InTreeTask{
