@@ -1,19 +1,26 @@
 package taskdb
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var (
+	ErrAttachEnded = errors.New("attach ended")
+)
 
 type TaskDB interface {
 	// Acquires the TaskDB lock as needed, then returns an AttachIterator
 	Attach() AttachIterator
 
 	// A Task will be inserted into the task table, and its first state inserted
-	PutPayload(topicName, taskID string, payload []byte) WriteResult
+	PutPayload(topicName, taskID string, payload string) WriteResult
 
 	// A new task state
 	PutState(state *TaskDBTaskState) WriteResult
 
 	// Retrieves the payload for a given task
-	GetPayload(topicName, taskID string) ([]byte, error)
+	GetPayload(topicName, taskID string) (string, error)
 
 	// Deletes all task states for a topic, and removes the topic from the task table. If no more tasks exist then the task will be removed from the task table
 	Delete(topicName, taskID string) WriteResult
@@ -55,7 +62,7 @@ type AttachIterator interface {
 type DrainTask struct {
 	Topic   string
 	ID      string
-	Payload []byte
+	Payload string
 }
 
 type DrainIterator interface {

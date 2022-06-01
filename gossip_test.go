@@ -46,7 +46,7 @@ func TestGossipDualNode(t *testing.T) {
 	gm.UltraQ.enqueueTask(&Task{
 		ID:               "test_task",
 		Topic:            "test_topic",
-		Payload:          nil,
+		Payload:          "",
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,
@@ -58,7 +58,7 @@ func TestGossipDualNode(t *testing.T) {
 	gm.UltraQ.enqueueTask(&Task{
 		ID:               "test_task2",
 		Topic:            "test_topic",
-		Payload:          nil,
+		Payload:          "",
 		CreatedAt:        time.Now(),
 		Version:          1,
 		DeliveryAttempts: 0,

@@ -108,7 +108,7 @@ func (s *HTTPServer) Enqueue(c echo.Context) error {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	err = s.UQ.Enqueue(body.Topics, []byte(body.Payload), utils.DefaultInt32(body.Priority, 10), utils.DefaultInt32(body.DelaySeconds, 0))
+	err = s.UQ.Enqueue(body.Topics, body.Payload, utils.DefaultInt32(body.Priority, 10), utils.DefaultInt32(body.DelaySeconds, 0))
 	if err != nil {
 		log.Error().Err(err).Interface("body", body).Msg("failed to enqueue message from http")
 		return c.String(http.StatusInternalServerError, err.Error())

@@ -36,7 +36,8 @@ type UltraQueue struct {
 func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 	// Initialize taskdb based on config
 	// FIXME: Temporary in memory task db
-	taskDB, err := taskdb.NewMemoryTaskDB()
+	// taskDB, err := taskdb.NewMemoryTaskDB()
+	taskDB, err := taskdb.NewBadgerTaskDB()
 	if err != nil {
 		return nil, fmt.Errorf("error creating new memory task db: %w", err)
 	}
@@ -59,7 +60,8 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 	attachIter := taskDB.Attach()
 	for {
 		tasks, err := attachIter.Next()
-		if tasks == nil && err == nil {
+		// fmt.Println("taskls: ", len(tasks))
+		if len(tasks) == 0 && err == nil {
 			log.Debug().Str("partition", uq.Partition).Msg("Finished attach in " + time.Since(s).String())
 			break
 		} else if err != nil {
@@ -74,7 +76,7 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 			result := uq.enqueueTask(&Task{
 				ID:               task.ID,
 				Topic:            task.Topic,
-				Payload:          nil,
+				Payload:          "",
 				CreatedAt:        task.CreatedAt,
 				Version:          task.Version,
 				DeliveryAttempts: task.DeliveryAttempts,
@@ -102,27 +104,37 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 func (uq *UltraQueue) Shutdown() {
 	log.Info().Str("partition", uq.Partition).Msg("Shutting down ultra queue...")
 	returnChan := make(chan struct{}, 1)
+	// TODO: Drain partition
+	uq.TaskDB.Drain()
 	uq.closeChan <- returnChan
 	<-returnChan
 	log.Info().Str("partition", uq.Partition).Msg("Shut down ultra queue")
 }
 
-func (uq *UltraQueue) Enqueue(topics []string, payload []byte, priority int32, delaySeconds int32) error {
+func (uq *UltraQueue) Enqueue(topics []string, payload string, priority int32, delaySeconds int32) error {
 	for _, topicName := range topics {
 		task := NewTask(topicName, uq.Partition, payload, priority)
 
 		// Insert task payload
-		uq.TaskDB.PutPayload(task.Topic, task.ID, payload)
+		payloadResult := uq.TaskDB.PutPayload(task.Topic, task.ID, payload)
 
 		// Strip the payload so we don't store it in the topic
-		task.Payload = []byte{}
+		task.Payload = ""
 
+		var stateResult taskdb.WriteResult
 		if delaySeconds > 0 {
-			uq.enqueueDelayedTask(task, delaySeconds)
+			stateResult = uq.enqueueDelayedTask(task, delaySeconds)
 		} else {
-			uq.enqueueTask(task)
+			stateResult = uq.enqueueTask(task)
 		}
 		// TODO: Wait for commits
+		payloadErr, stateErr := payloadResult.Get(), stateResult.Get()
+		if payloadErr != nil {
+			return fmt.Errorf("error putting payload: %w", payloadErr)
+		}
+		if stateErr != nil {
+			return fmt.Errorf("error enqueueing: %w", stateErr)
+		}
 	}
 
 	// TODO: Increment enqueue metric
@@ -143,6 +155,7 @@ func (uq *UltraQueue) Dequeue(topicName string, numTasks, inFlightTTLSeconds int
 		if err != nil {
 			// TODO: Handle this properly
 			log.Error().Err(err).Str("partition", uq.Partition).Str("topicName", topicName).Str("taskID", task.Task.ID).Msg("failed to get task payload")
+			return nil, fmt.Errorf("failed to get task payload: %w", err)
 		}
 		// Create a new task going out so we can assign the payload without storing it
 		tasks = append(tasks, &InTreeTask{
@@ -190,11 +203,11 @@ func (uq *UltraQueue) Nack(inFlightTaskID string, delaySeconds int32) (err error
 }
 
 func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int32) taskdb.WriteResult {
-
 	treeID := task.genTimeTreeID(task.CreatedAt.Add(time.Second * time.Duration(delaySeconds)))
 	treeTask := NewInTreeTask(treeID, task)
 
 	// Add task state to DB
+	task.Version++
 	wr := uq.TaskDB.PutState(&taskdb.TaskDBTaskState{
 		Topic:            task.Topic,
 		Partition:        uq.Partition,
@@ -217,6 +230,7 @@ func (uq *UltraQueue) enqueueDelayedTask(task *Task, delaySeconds int32) taskdb.
 func (uq *UltraQueue) enqueueTask(task *Task) taskdb.WriteResult {
 	log.Debug().Str("partition", uq.Partition).Str("topic", task.Topic).Msg("Enqueuing topic")
 	// Add task state to DB
+	task.Version++
 	wr := uq.TaskDB.PutState(&taskdb.TaskDBTaskState{
 		Topic:            task.Topic,
 		Partition:        uq.Partition,
@@ -264,6 +278,7 @@ func (uq *UltraQueue) dequeueTask(topicName string, numTasks, inFlightTTLSeconds
 		itt.TreeID = itt.Task.genExternalID(uq.Partition, dequeueTime.Add(time.Second*time.Duration(inFlightTTLSeconds)))
 		tasks = append(tasks, itt)
 		// Add task state to DB
+		itt.Task.Version++
 		uq.TaskDB.PutState(&taskdb.TaskDBTaskState{
 			Topic:            itt.Task.Topic,
 			Partition:        uq.Partition,

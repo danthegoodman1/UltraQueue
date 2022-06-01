@@ -41,7 +41,7 @@ message Task {
   string ID = 1;
 	string Topic = 2;
 
-	bytes Payload = 3;
+	string Payload = 3;
 	string CreatedAt = 4;
 
   sint32 Version = 5;

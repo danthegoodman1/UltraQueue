@@ -65,7 +65,7 @@ func TestInternalGRPCServer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*5000)
 	defer cancel()
 
-	err = uq.Enqueue([]string{"topic1", "topic2"}, nil, 3, 0)
+	err = uq.Enqueue([]string{"topic1", "topic2"}, "test payload", 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
