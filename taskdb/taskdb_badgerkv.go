@@ -219,14 +219,10 @@ func (tdb *BadgerTaskDB) attachLoad(ai *BadgerAttachIterator) {
 				// Add to channel
 				buf = append(buf, state)
 				if len(buf) >= 100 {
-					// TODO: Remove log line
-					log.Debug().Msg("dumping into channel")
 					// Dump into channel
 					for _, taskState := range buf {
 						ai.feed <- taskState
 					}
-					// TODO: Remove log line
-					log.Debug().Msg("dumped into channel")
 					buf = make([]*TaskDBTaskState, 0)
 				}
 				return nil
@@ -237,14 +233,10 @@ func (tdb *BadgerTaskDB) attachLoad(ai *BadgerAttachIterator) {
 		}
 		if len(buf) > 0 {
 			// We have at least one more item left
-			// TODO: Remove log line
-			log.Debug().Msg("final dumping into channel")
 			// Dump into channel
 			for _, taskState := range buf {
 				ai.feed <- taskState
 			}
-			// TODO: Remove log line
-			log.Debug().Msg("final dumped into channel")
 		}
 		return nil
 	})
