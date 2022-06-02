@@ -117,7 +117,6 @@ func (mtdb *MemoryTaskDB) deleteTaskStates(mapID string) {
 }
 
 func (mtdb *MemoryTaskDB) Drain() DrainIterator {
-	fmt.Println("called Drain()")
 	feedChan := make(chan *DrainTask, 1000) // extra buffer size
 	doneChan := make(chan struct{}, 1)
 
@@ -156,8 +155,6 @@ func (mtdb *MemoryTaskDB) drainLoad(di *MemoryDrainIterator) {
 					delete(mtdb.taskStateMap, mapID)
 					continue
 				}
-
-				fmt.Println("got drain task to load", mapID)
 
 				di.feed <- &DrainTask{
 					Topic:    lastState.Topic,
