@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"net"
 	"time"
 
@@ -85,4 +86,31 @@ func (g *InternalGRPCServer) Nack(ctx context.Context, in *pb.NackRequest) (*pb.
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return &pb.Applied{}, nil
+}
+
+func (g *InternalGRPCServer) DrainReceive(stream pb.UltraQueueInternal_DrainReceiveServer) error {
+	log.Debug().Msg("Getting drain tasks...")
+	for {
+		drainTask, err := stream.Recv()
+		if err == io.EOF {
+			log.Debug().Msg("got EOF, exiting")
+			return stream.SendAndClose(&pb.Applied{
+				Applied: true,
+			})
+		}
+		if err != nil {
+			log.Error().Err(err).Msg("error receiving drain tasks")
+			return status.Error(codes.Internal, err.Error())
+		}
+
+		tasks := drainTask.GetTasks()
+		for _, task := range tasks {
+			// TODO: Bulk enqueue where we don't wait for each commit
+			err = g.UQ.Enqueue([]string{task.Topic}, task.Payload, task.Priority, 0)
+			if err != nil {
+				log.Error().Err(err).Interface("task", task).Msg("error enqueueing drain task")
+				return status.Error(codes.Internal, err.Error())
+			}
+		}
+	}
 }

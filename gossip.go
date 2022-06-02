@@ -1,14 +1,20 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/danthegoodman1/UltraQueue/pb"
+	"github.com/danthegoodman1/UltraQueue/taskdb"
 	"github.com/hashicorp/memberlist"
 	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 var (
@@ -159,16 +165,92 @@ func (gm *GossipManager) pollTopicLen(t *time.Ticker) {
 	}
 }
 
-func (gm *GossipManager) Shutdown() {
+func (gm *GossipManager) Shutdown(drain bool) {
 	log.Info().Str("partition", gm.UltraQ.Partition).Msg("Shutting down gossip manager...")
 	returnChan := make(chan struct{}, 1)
 	gm.topicPollStopChan <- returnChan
+
+	if drain && gm.MemberList.NumMembers() > 1 {
+		// Drain partition
+		log.Info().Str("partition", gm.UltraQ.Partition).Int("numPartitions", gm.MemberList.NumMembers()).Msg("Draining partition...")
+		drainIterator := gm.UltraQ.GetDrainIterator()
+		wg := &sync.WaitGroup{}
+		gm.launchPartitionDrainWorkers(drainIterator, wg)
+		log.Info().Str("partition", gm.UltraQ.Partition).Msg("Waiting on waitgroup...")
+		wg.Wait()
+	}
+
 	log.Debug().Str("partition", gm.UltraQ.Partition).Msg("Leaving cluster...")
 	gm.MemberList.Leave(time.Second * 10)
 	log.Debug().Str("partition", gm.UltraQ.Partition).Msg("Shutting down...")
 	gm.MemberList.Shutdown()
 	<-returnChan
 	log.Info().Str("partition", gm.UltraQ.Partition).Msg("Shut down gossip manager")
+}
+
+func (gm *GossipManager) launchPartitionDrainWorkers(drainIterator taskdb.DrainIterator, wg *sync.WaitGroup) {
+	gm.PartitionIndexMu.RLock()
+	defer gm.PartitionIndexMu.RUnlock()
+	for remotePartition, node := range gm.PartitionIndex {
+		wg.Add(1)
+		go gm.drainTaskToPartition(drainIterator, wg, remotePartition, node)
+	}
+}
+
+// Launched in a goroutine, consumes from a drain iterator until empty or error is thrown. Drains into a target node
+func (gm *GossipManager) drainTaskToPartition(di taskdb.DrainIterator, wg *sync.WaitGroup, remotePartition string, node *GossipNode) {
+	defer wg.Done()
+	addr := fmt.Sprintf("%s:%s", node.AdvertiseAddress, node.AdvertisePort)
+	log.Info().Str("partition", gm.UltraQ.Partition).Str("targetPartition", remotePartition).Str("targetAddr", addr).Msg("launching drain task to partition worker")
+
+	// TODO: Use cached grpc clients if exists
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	if err != nil {
+		log.Error().Err(err).Str("partition", gm.UltraQ.Partition).Str("targetPartition", remotePartition).Str("targetAddr", addr).Msg("failed to dial remote partition")
+		return
+	}
+	defer conn.Close()
+
+	// TODO: configure a max timeout that is definitely not 60 seconds
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+	defer cancel()
+	client := pb.NewUltraQueueInternalClient(conn)
+	stream, err := client.DrainReceive(ctx)
+	if err != nil {
+		log.Error().Err(err).Str("partition", gm.UltraQ.Partition).Str("targetPartition", remotePartition).Str("targetAddr", addr).Msg("failed to start stream")
+	}
+
+	for {
+		tasks, err := di.Next()
+		if len(tasks) == 0 && err == nil {
+			log.Info().Str("partition", gm.UltraQ.Partition).Str("targetPartition", remotePartition).Str("targetAddr", addr).Msg("no more tasks, exiting")
+			_, err = stream.CloseAndRecv()
+			if err != nil {
+				log.Error().Err(err).Str("partition", gm.UltraQ.Partition).Str("targetPartition", remotePartition).Str("targetAddr", addr).Msg("error closing stream")
+			}
+			return
+		} else if err != nil {
+			log.Error().Err(err).Str("partition", gm.UltraQ.Partition).Str("targetPartition", remotePartition).Str("targetAddr", addr).Msg("Error getting next asks from partition, exiting goroutine")
+			return
+		}
+
+		dts := make([]*pb.DrainTask, 0)
+		for _, task := range tasks {
+			dts = append(dts, &pb.DrainTask{
+				Priority: task.Priority,
+				Topic:    task.Topic,
+				Payload:  task.Payload,
+			})
+		}
+
+		// Send the tasks to the partition
+		err = stream.Send(&pb.DrainTaskList{
+			Tasks: dts,
+		})
+		if err != nil {
+			log.Error().Err(err).Str("partition", gm.UltraQ.Partition).Str("targetPartition", remotePartition).Str("targetAddr", addr).Msg("error sending drain tasks")
+		}
+	}
 }
 
 // Sets the local index of known remote partition topic lengths

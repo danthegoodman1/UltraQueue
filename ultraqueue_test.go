@@ -317,3 +317,35 @@ func TestNack(t *testing.T) {
 	}
 	uq.Shutdown()
 }
+
+func TestDrain(t *testing.T) {
+	uq, err := NewUltraQueue("testpart", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = uq.Enqueue([]string{"topic1", "topic2"}, "hey this is a payload", 3, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Drain them
+	di := uq.GetDrainIterator()
+	gotTasks := 0
+	for {
+		tasks, err := di.Next()
+		if len(tasks) == 0 && err == nil {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		for _, task := range tasks {
+			t.Log(task)
+			gotTasks++
+		}
+	}
+	if gotTasks != 2 {
+		t.Fatalf("did not get 2 tasks, got %d", gotTasks)
+	}
+	t.Log("done")
+}

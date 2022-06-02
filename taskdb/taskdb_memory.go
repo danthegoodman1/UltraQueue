@@ -3,6 +3,9 @@ package taskdb
 import (
 	"fmt"
 	"sync"
+	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type MemoryTaskDB struct {
@@ -24,16 +27,15 @@ func NewMemoryTaskDB() (*MemoryTaskDB, error) {
 
 type FakeAttachIterator struct{}
 
-type MemoryDrainIterator struct{}
+type MemoryDrainIterator struct {
+	feed     chan *DrainTask
+	doneChan chan struct{}
+	tdb      *MemoryTaskDB
+}
 
 type MemoryWriteResult struct{}
 
 func (fai *FakeAttachIterator) Next() ([]*TaskDBTaskState, error) {
-	return nil, nil
-}
-
-func (mdi *MemoryDrainIterator) Next() ([]*DrainTask, error) {
-	// TODO: Drain from map, release every X Y
 	return nil, nil
 }
 
@@ -115,7 +117,72 @@ func (mtdb *MemoryTaskDB) deleteTaskStates(mapID string) {
 }
 
 func (mtdb *MemoryTaskDB) Drain() DrainIterator {
-	return &MemoryDrainIterator{}
+	feedChan := make(chan *DrainTask, 1000) // extra buffer size
+	doneChan := make(chan struct{}, 1)
+
+	di := &MemoryDrainIterator{
+		tdb:      mtdb,
+		feed:     feedChan,
+		doneChan: doneChan,
+	}
+
+	go mtdb.drainLoad(di)
+
+	return di
+}
+
+// Launched in a goroutine, continues to pass over the state map looking for enqueued tasks and draining them until the tree is empty
+func (mtdb *MemoryTaskDB) drainLoad(di *MemoryDrainIterator) {
+	// Hehe risky manual lock releasing
+	for {
+		mtdb.taskStateMu.Lock()
+		if len(mtdb.taskStateMap) == 0 {
+			// We are done
+			log.Debug().Msg("done drain loading!")
+			close(di.feed)
+			di.doneChan <- struct{}{}
+			return
+		}
+		// Find any enqueued tasks
+		for mapID, states := range mtdb.taskStateMap {
+			// We know the len can never be zero
+			lastState := states[len(states)-1]
+			if lastState.State == TASK_STATE_ENQUEUED {
+				// Get the payload
+				payload, err := mtdb.GetPayload(lastState.Topic, lastState.ID)
+				if err == ErrPayloadNotFound {
+					log.Error().Str("taskID", lastState.ID).Str("topic", lastState.Topic).Msg("payload not found while draining")
+					delete(mtdb.taskStateMap, mapID)
+					continue
+				}
+
+				di.feed <- &DrainTask{
+					Topic:    lastState.Topic,
+					Priority: lastState.Priority,
+					Payload:  payload,
+				}
+				delete(mtdb.taskStateMap, mapID)
+			}
+		}
+		mtdb.taskStateMu.Unlock()
+		// Sleep for 10ms to release the lock and not spin CPU too hard
+		time.Sleep(time.Millisecond * 10)
+	}
+}
+
+func (di *MemoryDrainIterator) Next() ([]*DrainTask, error) {
+	buf := make([]*DrainTask, 0)
+	for {
+		state, open := <-di.feed
+		if !open {
+			return buf, nil
+		}
+		buf = append(buf, state)
+		if len(buf) >= 100 {
+			// Read up to 100 items
+			return buf, nil
+		}
+	}
 }
 
 func (MemoryTaskDB) getMapID(topicName, taskID string) string {

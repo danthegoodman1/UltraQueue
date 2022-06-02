@@ -60,7 +60,7 @@ func main() {
 	mInternal := cmux.New(lisInternal)
 
 	httpL := m.Match(cmux.HTTP2(), cmux.HTTP1Fast())
-	go StartHTTPServer(httpL, uq, gm)
+	httpServer := StartHTTPServer(httpL, uq, gm)
 
 	go m.Serve()
 
@@ -82,10 +82,12 @@ func main() {
 	} else {
 		log.Info().Msg("Successfully shutdown HTTP server")
 	}
+	internalGRPCServer.GracefulStop()
 
-	gm.Shutdown()
+	gm.Shutdown(true)
 	log.Info().Msg("Shut down gossip manager")
-
+	uq.Shutdown()
+	log.Info().Msg("Shut down UltraQueue partition")
 }
 
 type CallerHook struct {

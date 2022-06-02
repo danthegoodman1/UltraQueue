@@ -25,6 +25,7 @@ type UltraQueueInternalClient interface {
 	Dequeue(ctx context.Context, in *DequeueRequest, opts ...grpc.CallOption) (*TaskResponse, error)
 	Ack(ctx context.Context, in *AckRequest, opts ...grpc.CallOption) (*Applied, error)
 	Nack(ctx context.Context, in *NackRequest, opts ...grpc.CallOption) (*Applied, error)
+	DrainReceive(ctx context.Context, opts ...grpc.CallOption) (UltraQueueInternal_DrainReceiveClient, error)
 }
 
 type ultraQueueInternalClient struct {
@@ -62,6 +63,40 @@ func (c *ultraQueueInternalClient) Nack(ctx context.Context, in *NackRequest, op
 	return out, nil
 }
 
+func (c *ultraQueueInternalClient) DrainReceive(ctx context.Context, opts ...grpc.CallOption) (UltraQueueInternal_DrainReceiveClient, error) {
+	stream, err := c.cc.NewStream(ctx, &UltraQueueInternal_ServiceDesc.Streams[0], "/UltraQueueInternal/DrainReceive", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &ultraQueueInternalDrainReceiveClient{stream}
+	return x, nil
+}
+
+type UltraQueueInternal_DrainReceiveClient interface {
+	Send(*DrainTaskList) error
+	CloseAndRecv() (*Applied, error)
+	grpc.ClientStream
+}
+
+type ultraQueueInternalDrainReceiveClient struct {
+	grpc.ClientStream
+}
+
+func (x *ultraQueueInternalDrainReceiveClient) Send(m *DrainTaskList) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *ultraQueueInternalDrainReceiveClient) CloseAndRecv() (*Applied, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(Applied)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // UltraQueueInternalServer is the server API for UltraQueueInternal service.
 // All implementations must embed UnimplementedUltraQueueInternalServer
 // for forward compatibility
@@ -69,6 +104,7 @@ type UltraQueueInternalServer interface {
 	Dequeue(context.Context, *DequeueRequest) (*TaskResponse, error)
 	Ack(context.Context, *AckRequest) (*Applied, error)
 	Nack(context.Context, *NackRequest) (*Applied, error)
+	DrainReceive(UltraQueueInternal_DrainReceiveServer) error
 	mustEmbedUnimplementedUltraQueueInternalServer()
 }
 
@@ -84,6 +120,9 @@ func (UnimplementedUltraQueueInternalServer) Ack(context.Context, *AckRequest) (
 }
 func (UnimplementedUltraQueueInternalServer) Nack(context.Context, *NackRequest) (*Applied, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Nack not implemented")
+}
+func (UnimplementedUltraQueueInternalServer) DrainReceive(UltraQueueInternal_DrainReceiveServer) error {
+	return status.Errorf(codes.Unimplemented, "method DrainReceive not implemented")
 }
 func (UnimplementedUltraQueueInternalServer) mustEmbedUnimplementedUltraQueueInternalServer() {}
 
@@ -152,6 +191,32 @@ func _UltraQueueInternal_Nack_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UltraQueueInternal_DrainReceive_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(UltraQueueInternalServer).DrainReceive(&ultraQueueInternalDrainReceiveServer{stream})
+}
+
+type UltraQueueInternal_DrainReceiveServer interface {
+	SendAndClose(*Applied) error
+	Recv() (*DrainTaskList, error)
+	grpc.ServerStream
+}
+
+type ultraQueueInternalDrainReceiveServer struct {
+	grpc.ServerStream
+}
+
+func (x *ultraQueueInternalDrainReceiveServer) SendAndClose(m *Applied) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *ultraQueueInternalDrainReceiveServer) Recv() (*DrainTaskList, error) {
+	m := new(DrainTaskList)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // UltraQueueInternal_ServiceDesc is the grpc.ServiceDesc for UltraQueueInternal service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -172,6 +237,12 @@ var UltraQueueInternal_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _UltraQueueInternal_Nack_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "DrainReceive",
+			Handler:       _UltraQueueInternal_DrainReceive_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "pb/main.proto",
 }
