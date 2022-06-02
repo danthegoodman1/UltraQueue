@@ -220,6 +220,12 @@ func TestRemoteTimeoutDrain(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Try one with delay
+	err = uq1.Enqueue([]string{"topic3"}, "p3", 3, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Wait for gossip propagation
 	time.Sleep(time.Millisecond * 400)
 
