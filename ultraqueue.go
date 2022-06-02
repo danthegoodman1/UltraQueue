@@ -108,8 +108,6 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 func (uq *UltraQueue) Shutdown() {
 	log.Info().Str("partition", uq.Partition).Msg("Shutting down ultra queue...")
 	returnChan := make(chan struct{}, 1)
-	// TODO: Drain partition
-	uq.TaskDB.Drain()
 	uq.closeChan <- returnChan
 	<-returnChan
 	log.Info().Str("partition", uq.Partition).Msg("Shut down ultra queue")
