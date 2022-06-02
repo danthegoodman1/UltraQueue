@@ -82,6 +82,7 @@ func main() {
 	} else {
 		log.Info().Msg("Successfully shutdown HTTP server")
 	}
+	internalGRPCServer.GracefulStop()
 
 	gm.Shutdown()
 	log.Info().Msg("Shut down gossip manager")
