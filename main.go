@@ -85,7 +85,8 @@ func main() {
 
 	gm.Shutdown()
 	log.Info().Msg("Shut down gossip manager")
-
+	uq.Shutdown()
+	log.Info().Msg("Shut down UltraQueue partition")
 }
 
 type CallerHook struct {
