@@ -120,7 +120,7 @@ func TestRemoteDrain(t *testing.T) {
 	if len(tasks) == 0 || tasks[0].Task.Payload != "hey this is a payload" {
 		t.Fatal("did not get the task from the second partition")
 	}
-	t.Logf("%+v", tasks)
+	t.Logf("%+v", tasks[0])
 
 	gm2.Shutdown(false)
 	uq2.Shutdown()

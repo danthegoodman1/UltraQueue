@@ -60,7 +60,7 @@ func main() {
 	mInternal := cmux.New(lisInternal)
 
 	httpL := m.Match(cmux.HTTP2(), cmux.HTTP1Fast())
-	go StartHTTPServer(httpL, uq, gm)
+	httpServer := StartHTTPServer(httpL, uq, gm)
 
 	go m.Serve()
 

@@ -30,11 +30,7 @@ type CustomValidator struct {
 	validator *validator.Validate
 }
 
-var (
-	httpServer *HTTPServer
-)
-
-func StartHTTPServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
+func StartHTTPServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) (httpServer *HTTPServer) {
 	echoInstance := echo.New()
 	httpServer = &HTTPServer{
 		Echo: echoInstance,
@@ -74,10 +70,15 @@ func StartHTTPServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
 	log.Info().Msg("Starting HTTP API at " + lis.Addr().String())
 	httpServer.Echo.Listener = lis
 	server := &http2.Server{}
-	err := httpServer.Echo.StartH2CServer("", server)
-	if err != nil && err != http.ErrServerClosed && err != cmux.ErrServerClosed {
-		log.Fatal().Err(err).Msg("Failed to start h2c server")
-	}
+
+	go func() {
+		err := httpServer.Echo.StartH2CServer("", server)
+		if err != nil && err != http.ErrServerClosed && err != cmux.ErrServerClosed {
+			log.Fatal().Err(err).Msg("Failed to start h2c server")
+		}
+	}()
+
+	return
 }
 
 func (cv *CustomValidator) Validate(i interface{}) error {
