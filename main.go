@@ -84,7 +84,7 @@ func main() {
 	}
 	internalGRPCServer.GracefulStop()
 
-	gm.Shutdown()
+	gm.Shutdown(true)
 	log.Info().Msg("Shut down gossip manager")
 	uq.Shutdown()
 	log.Info().Msg("Shut down UltraQueue partition")

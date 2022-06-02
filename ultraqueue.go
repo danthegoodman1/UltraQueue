@@ -31,13 +31,16 @@ type UltraQueue struct {
 	delayTreeMu    *sync.Mutex
 	inFlightTicker *time.Ticker
 	closeChan      chan chan struct{}
+
+	// TODO: Check if draining for enqueue and dequeue
+	IsDraining bool
 }
 
 func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 	// Initialize taskdb based on config
-	// FIXME: Temporary in memory task db
-	// taskDB, err := taskdb.NewMemoryTaskDB()
-	taskDB, err := taskdb.NewBadgerTaskDB()
+	// FIXME: Temporary in task db initialization
+	taskDB, err := taskdb.NewMemoryTaskDB()
+	// taskDB, err := taskdb.NewBadgerTaskDB()
 	if err != nil {
 		return nil, fmt.Errorf("error creating new memory task db: %w", err)
 	}
@@ -53,6 +56,7 @@ func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 		topics:         make(map[string]*Topic),
 		topicMu:        &sync.RWMutex{},
 		TaskDB:         taskDB,
+		IsDraining:     false,
 	}
 
 	// Attach TaskDB
@@ -478,4 +482,8 @@ func (uq *UltraQueue) nack(inTreeTaskID string, delaySeconds int32) bool {
 	} else {
 		return false
 	}
+}
+
+func (uq *UltraQueue) GetDrainIterator() taskdb.DrainIterator {
+	return uq.TaskDB.Drain()
 }

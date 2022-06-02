@@ -37,7 +37,7 @@ func TestRemoteAck(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
-	defer gm1.Shutdown()
+	defer gm1.Shutdown(false)
 
 	uq2, err := NewUltraQueue(partition2, 100)
 	if err != nil {
@@ -48,7 +48,7 @@ func TestRemoteAck(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
-	defer gm2.Shutdown()
+	defer gm2.Shutdown(false)
 
 	lis1, err := net.Listen("tcp", fmt.Sprintf(":%s", httpPort1))
 	if err != nil {
@@ -183,7 +183,7 @@ func TestRemoteNack(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
-	defer gm1.Shutdown()
+	defer gm1.Shutdown(false)
 
 	uq2, err := NewUltraQueue(partition2, 100)
 	if err != nil {
@@ -194,7 +194,7 @@ func TestRemoteNack(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
-	defer gm2.Shutdown()
+	defer gm2.Shutdown(false)
 
 	lis1, err := net.Listen("tcp", fmt.Sprintf(":%s", httpPort1))
 	if err != nil {
@@ -331,7 +331,7 @@ func TestRemoteDequeue(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
-	defer gm1.Shutdown()
+	defer gm1.Shutdown(false)
 
 	uq2, err := NewUltraQueue(partition2, 100)
 	if err != nil {
@@ -342,7 +342,7 @@ func TestRemoteDequeue(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
-	defer gm2.Shutdown()
+	defer gm2.Shutdown(false)
 
 	lis1, err := net.Listen("tcp", fmt.Sprintf(":%s", httpPort1))
 	if err != nil {

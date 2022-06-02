@@ -16,7 +16,7 @@ func TestGossipSingleNode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gm.Shutdown()
+	gm.Shutdown(false)
 }
 
 func TestGossipDualNode(t *testing.T) {
@@ -75,7 +75,7 @@ func TestGossipDualNode(t *testing.T) {
 
 	time.Sleep(time.Second * 5)
 	t.Log("Shutting down")
-	gm.Shutdown()
+	gm.Shutdown(false)
 	time.Sleep(time.Second * 2)
-	gm2.Shutdown()
+	gm2.Shutdown(false)
 }

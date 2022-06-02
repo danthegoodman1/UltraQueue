@@ -55,18 +55,18 @@ func NewTaskDBTaskState(partition, topicName, taskID string, state TaskState, ve
 }
 
 type AttachIterator interface {
-	// Returns an array of task states. Returns nil when there are no more
+	// Returns an array of task states. Returns nil when there are no more, safe to call multiple times when empty
 	Next() ([]*TaskDBTaskState, error)
 }
 
 type DrainTask struct {
-	Topic   string
-	ID      string
-	Payload string
+	Topic    string
+	Priority int32
+	Payload  string
 }
 
 type DrainIterator interface {
-	// Returns an array of task payloads that can be joined to their current states, and sent to other partitions. Returns nil when there are no more
+	// Returns an array of task payloads that can be joined to their current states, and sent to other partitions. Returns nil when there are no more, safe to call multiple times when empty
 	Next() ([]*DrainTask, error)
 }
 

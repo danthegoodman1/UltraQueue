@@ -6,6 +6,7 @@ service UltraQueueInternal {
   rpc Dequeue(DequeueRequest) returns (TaskResponse);
   rpc Ack(AckRequest) returns (Applied);
   rpc Nack(NackRequest) returns (Applied);
+  rpc DrainReceive(stream DrainTaskList) returns (Applied);
 }
 
 
@@ -48,4 +49,14 @@ message Task {
 	sint32 DeliveryAttempts = 6;
 
 	sint32 Priority = 7;
+}
+
+message DrainTask {
+  sint32 Priority = 1;
+	string Topic = 2;
+	string Payload = 3;
+}
+
+message DrainTaskList {
+  repeated DrainTask tasks = 1;
 }
