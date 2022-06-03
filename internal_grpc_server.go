@@ -14,17 +14,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var (
-	internalGRPCServer *grpc.Server
-)
-
 type InternalGRPCServer struct {
 	pb.UnsafeUltraQueueInternalServer
 	UQ *UltraQueue
 	GM *GossipManager
 }
 
-func NewInternalGRPCServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) {
+func NewInternalGRPCServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) (internalGRPCServer *grpc.Server) {
 	var opts []grpc.ServerOption
 	internalGRPCServer = grpc.NewServer(opts...)
 
@@ -33,10 +29,13 @@ func NewInternalGRPCServer(lis net.Listener, uq *UltraQueue, gm *GossipManager) 
 		GM: gm,
 	})
 	log.Info().Msg("Starting internal grpc server on " + lis.Addr().String())
-	err := internalGRPCServer.Serve(lis)
-	if err != nil && err != grpc.ErrServerStopped && err != cmux.ErrServerClosed {
-		log.Fatal().Err(err).Msg("failed to start internal grpc server")
-	}
+	go func() {
+		err := internalGRPCServer.Serve(lis)
+		if err != nil && err != grpc.ErrServerStopped && err != cmux.ErrServerClosed {
+			log.Fatal().Err(err).Msg("failed to start internal grpc server")
+		}
+	}()
+	return internalGRPCServer
 }
 
 func (g *InternalGRPCServer) Dequeue(ctx context.Context, in *pb.DequeueRequest) (*pb.TaskResponse, error) {

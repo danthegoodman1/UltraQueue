@@ -65,7 +65,7 @@ func main() {
 	go m.Serve()
 
 	internalGRPCListener := mInternal.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
-	go NewInternalGRPCServer(internalGRPCListener, uq, gm)
+	internalGRPCServer := NewInternalGRPCServer(internalGRPCListener, uq, gm)
 
 	go mInternal.Serve()
 
