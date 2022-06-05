@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -20,13 +21,16 @@ func TestGossipSingleNode(t *testing.T) {
 }
 
 func TestGossipDualNode(t *testing.T) {
+	gossipPort1 := 9800
+	gossipPort2 := 9801
+
 	t.Log("Testing gossip double")
 
 	uq, err := NewUltraQueue("testpart", 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	gm, err := NewGossipManager("testpart", "0.0.0.0", uq, 9800, "127.0.0.1", "9990", []string{})
+	gm, err := NewGossipManager("testpart", "0.0.0.0", uq, gossipPort1, "127.0.0.1", "9990", []string{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +39,7 @@ func TestGossipDualNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gm2, err := NewGossipManager("testpart2", "0.0.0.0", uq2, 9801, "127.0.0.1", "9991", []string{"localhost:9900"})
+	gm2, err := NewGossipManager("testpart2", "0.0.0.0", uq2, gossipPort2, "127.0.0.1", "9991", []string{fmt.Sprintf("localhost:%d", gossipPort1)})
 	if err != nil {
 		t.Fatal(err)
 	}
