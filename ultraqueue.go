@@ -39,8 +39,8 @@ type UltraQueue struct {
 func NewUltraQueue(partition string, bufferLen int64) (*UltraQueue, error) {
 	// Initialize taskdb based on config
 	// FIXME: Temporary in task db initialization
-	// taskDB, err := taskdb.NewMemoryTaskDB()
-	taskDB, err := taskdb.NewBadgerTaskDB(partition)
+	taskDB, err := taskdb.NewMemoryTaskDB()
+	// taskDB, err := taskdb.NewBadgerTaskDB(partition)
 	if err != nil {
 		return nil, fmt.Errorf("error creating new task db: %w", err)
 	}
