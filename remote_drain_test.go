@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"testing"
 	"time"
 
@@ -540,8 +542,8 @@ func TestRemoteDrainNack(t *testing.T) {
 	grpcPort2 := "9091"
 	partition1 := "part1"
 	partition2 := "part2"
-	gossipPort1 := 6100
-	gossipPort2 := 6101
+	gossipPort1 := 6410
+	gossipPort2 := 6411
 
 	uq1, err := NewUltraQueue(partition1, 100)
 	if err != nil {
@@ -624,9 +626,24 @@ func TestRemoteDrainNack(t *testing.T) {
 	t.Log("waiting for propagation")
 
 	// Wait for gossip propagation
-	time.Sleep(time.Millisecond * 600)
+	time.Sleep(time.Millisecond * 6000)
 
 	t.Log("waited for propagation")
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%s/debug/remotePartitions.json", httpPort2), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resBody, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(string(resBody))
 
 	// Dequeue for 10 seconds
 	tasks, err := uq1.Dequeue("topic1", 1, 10)
