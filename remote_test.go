@@ -25,8 +25,8 @@ func TestRemoteAck(t *testing.T) {
 	grpcPort2 := "9091"
 	partition1 := "part1"
 	partition2 := "part2"
-	gossipPort1 := 9070
-	gossipPort2 := 9071
+	gossipPort1 := 8570
+	gossipPort2 := 8571
 
 	uq1, err := NewUltraQueue(partition1, 100)
 	if err != nil {
@@ -37,7 +37,6 @@ func TestRemoteAck(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
-	defer gm1.Shutdown(false)
 
 	uq2, err := NewUltraQueue(partition2, 100)
 	if err != nil {
@@ -48,7 +47,6 @@ func TestRemoteAck(t *testing.T) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to start new gossip manager")
 	}
-	defer gm2.Shutdown(false)
 
 	lis1, err := net.Listen("tcp", fmt.Sprintf(":%s", httpPort1))
 	if err != nil {
@@ -105,12 +103,16 @@ func TestRemoteAck(t *testing.T) {
 	// Enqueue a message on node 1
 	err = uq1.Enqueue([]string{"topic1", "topic2"}, "hey this is a payload", 3, 0)
 	if err != nil {
+		gm1.Shutdown(false)
+		gm2.Shutdown(false)
 		t.Fatal(err)
 	}
 
 	// Dequeue the message
 	tasks, err := uq1.Dequeue("topic1", 1, 10)
 	if err != nil {
+		gm1.Shutdown(false)
+		gm2.Shutdown(false)
 		t.Fatal(err)
 	}
 
@@ -123,17 +125,23 @@ func TestRemoteAck(t *testing.T) {
 
 	b, err := json.Marshal(&bodyStruct)
 	if err != nil {
+		gm1.Shutdown(false)
+		gm2.Shutdown(false)
 		t.Fatal(err)
 	}
 
 	// Check node 2 known partitions
 	req, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%s/debug/remotePartitions.json", httpPort2), nil)
 	if err != nil {
+		gm1.Shutdown(false)
+		gm2.Shutdown(false)
 		t.Fatal(err)
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
+		gm1.Shutdown(false)
+		gm2.Shutdown(false)
 		t.Fatal(err)
 	}
 
@@ -143,6 +151,8 @@ func TestRemoteAck(t *testing.T) {
 	// Ack from node 2
 	req, err = http.NewRequest("POST", fmt.Sprintf("http://localhost:%s/ack", httpPort2), bytes.NewReader(b))
 	if err != nil {
+		gm1.Shutdown(false)
+		gm2.Shutdown(false)
 		t.Fatal(err)
 	}
 
@@ -150,14 +160,20 @@ func TestRemoteAck(t *testing.T) {
 
 	res, err = http.DefaultClient.Do(req)
 	if err != nil {
+		gm1.Shutdown(false)
+		gm2.Shutdown(false)
 		t.Fatal(err)
 	}
 
 	if res.StatusCode > 299 {
 		msg, _ := ioutil.ReadAll(res.Body)
+		gm1.Shutdown(false)
+		gm2.Shutdown(false)
 		t.Fatalf("Got high status code %d: %s", res.StatusCode, string(msg))
 	}
 	t.Log("success!")
+	gm1.Shutdown(false)
+	gm2.Shutdown(false)
 }
 
 func TestRemoteNack(t *testing.T) {

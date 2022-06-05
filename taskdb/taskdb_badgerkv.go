@@ -2,6 +2,7 @@ package taskdb
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/rs/zerolog/log"
@@ -13,15 +14,19 @@ type BadgerTaskDB struct {
 	stateDB   *badger.DB
 }
 
-func NewBadgerTaskDB() (*BadgerTaskDB, error) {
+func NewBadgerTaskDB(partition string) (*BadgerTaskDB, error) {
 	// TODO: Get file location from config
-	pdb, err := badger.Open(badger.DefaultOptions("./badger_payload"))
+	opts := badger.DefaultOptions(fmt.Sprintf("./badger_payload_%s", partition))
+	opts.Logger = nil
+	pdb, err := badger.Open(opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open badger DB: %w", err)
+		return nil, fmt.Errorf("failed to open badger DB1: %w", err)
 	}
-	sdb, err := badger.Open(badger.DefaultOptions("./badger_states"))
+	opts = badger.DefaultOptions(fmt.Sprintf("./badger_states_%s", partition))
+	opts.Logger = nil
+	sdb, err := badger.Open(opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open badger DB: %w", err)
+		return nil, fmt.Errorf("failed to open badger DB2: %w", err)
 	}
 	return &BadgerTaskDB{
 		payloadDB: pdb,
@@ -38,6 +43,15 @@ type BadgerAttachIterator struct {
 type BadgerDrainIterator struct {
 	payloadDB *badger.DB
 	stateDB   *badger.DB
+
+	feed     chan *DrainTask
+	doneChan chan struct{}
+}
+
+type BadgerTaskStateWithID struct {
+	State   *TaskDBTaskState
+	ID      []byte
+	Payload string
 }
 
 type BadgerWriteResult struct {
@@ -57,11 +71,6 @@ func (ai *BadgerAttachIterator) Next() ([]*TaskDBTaskState, error) {
 			return buf, nil
 		}
 	}
-}
-
-func (di *BadgerDrainIterator) Next() ([]*DrainTask, error) {
-	// TODO: Drain from map, release every X Y
-	return nil, nil
 }
 
 func (wr BadgerWriteResult) Get() error {
@@ -181,13 +190,126 @@ func (tdb *BadgerTaskDB) deleteTaskStates(topicName, taskID string) {
 }
 
 func (tdb *BadgerTaskDB) Drain() DrainIterator {
-	tdb.payloadDB.DropAll()
-	tdb.stateDB.DropAll()
-	tdb.payloadDB.Close()
-	tdb.stateDB.Close()
-	return &BadgerDrainIterator{
+
+	feedChan := make(chan *DrainTask, 1000) // extra buffer size
+	doneChan := make(chan struct{}, 1)
+
+	di := &BadgerDrainIterator{
+		feed:      feedChan,
+		doneChan:  doneChan,
 		payloadDB: tdb.payloadDB,
 		stateDB:   tdb.stateDB,
+	}
+
+	go tdb.drainLoad(di)
+
+	return di
+}
+
+func (di *BadgerDrainIterator) Next() ([]*DrainTask, error) {
+	buf := make([]*DrainTask, 0)
+	for {
+		state, open := <-di.feed
+		if !open {
+			return buf, nil
+		}
+		buf = append(buf, state)
+		if len(buf) >= 100 {
+			// Read up to 100 items
+			return buf, nil
+		}
+	}
+}
+
+// Launched in a goroutine
+func (tdb *BadgerTaskDB) drainLoad(di *BadgerDrainIterator) {
+	// While we still have non-enqueued states, keep scanning
+	for {
+		rows := 0
+		buf := make([]*BadgerTaskStateWithID, 0)
+		err := di.stateDB.View(func(txn *badger.Txn) error {
+			it := txn.NewIterator(badger.DefaultIteratorOptions)
+			defer it.Close()
+			for it.Rewind(); it.Valid(); it.Next() {
+				rows++
+				item := it.Item()
+				err := item.Value(func(val []byte) error {
+					state, err := tdb.bytesToTaskState(val)
+					if err != nil {
+						return fmt.Errorf("error getting task state from bytes: %w", err)
+					}
+					if state.State != TASK_STATE_ENQUEUED {
+						// Not ready
+						return nil
+					}
+
+					// Get the payload
+					payload, err := tdb.GetPayload(state.Topic, state.ID)
+					if err != nil {
+						return fmt.Errorf("error getting payload for task: %w", err)
+					}
+
+					// Add to channel
+					buf = append(buf, &BadgerTaskStateWithID{
+						State:   state,
+						Payload: payload,
+						ID:      item.Key(),
+					})
+					return nil
+				})
+				if len(buf) >= 100 {
+					// Send the buffer
+					break
+				}
+				if err != nil {
+					return fmt.Errorf("error getting item value from badger: %w", err)
+				}
+			}
+			return nil
+		})
+
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to iterate over drain view transaction")
+			// TODO: Something here
+		}
+
+		if len(buf) > 0 {
+			// We have at least one item
+			// Dump into channel and delete from states
+			err := di.stateDB.Update(func(txn *badger.Txn) error {
+				for _, taskState := range buf {
+					di.feed <- &DrainTask{
+						Topic:    taskState.State.Topic,
+						Priority: taskState.State.Priority,
+						Payload:  taskState.Payload,
+					}
+					err := txn.Delete(taskState.ID)
+					if err != nil {
+						return fmt.Errorf("error deleting task state: %w", err)
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				log.Fatal().Err(err).Msg("failed to send badger drain buffer to chan")
+				// TODO: Something here
+			}
+		}
+
+		if rows == 0 {
+			// No more states, we can exit
+			di.doneChan <- struct{}{}
+			close(di.feed)
+
+			// Drop everything and close
+			tdb.payloadDB.DropAll()
+			tdb.stateDB.DropAll()
+			tdb.payloadDB.Close()
+			tdb.stateDB.Close()
+			return
+		}
+
+		time.Sleep(time.Millisecond * 10) // prevent spin
 	}
 }
 

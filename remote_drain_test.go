@@ -505,6 +505,7 @@ func TestRemoteDrainDelay(t *testing.T) {
 	gm1.Shutdown(true)
 	t.Log("finished shutting down partition 1")
 	if time.Since(s) > time.Second*6 {
+		gm2.Shutdown(false)
 		t.Fatalf("only took %s", time.Since(s))
 	}
 	uq1.Shutdown()
@@ -512,10 +513,12 @@ func TestRemoteDrainDelay(t *testing.T) {
 	// Check partition 2
 	tasks, err := uq2.Dequeue("topic1", 1, 10)
 	if err != nil {
+		gm2.Shutdown(false)
 		t.Fatal(err)
 	}
 
 	if len(tasks) == 0 || tasks[0].Task.Payload != "hey this is a payload" {
+		gm2.Shutdown(false)
 		t.Fatal("did not get the task from the second partition")
 	}
 	t.Logf("%+v", tasks[0])
@@ -537,8 +540,8 @@ func TestRemoteDrainNack(t *testing.T) {
 	grpcPort2 := "9091"
 	partition1 := "part1"
 	partition2 := "part2"
-	gossipPort1 := 6700
-	gossipPort2 := 6701
+	gossipPort1 := 6100
+	gossipPort2 := 6101
 
 	uq1, err := NewUltraQueue(partition1, 100)
 	if err != nil {
@@ -618,8 +621,12 @@ func TestRemoteDrainNack(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Log("waiting for propagation")
+
 	// Wait for gossip propagation
 	time.Sleep(time.Millisecond * 600)
+
+	t.Log("waited for propagation")
 
 	// Dequeue for 10 seconds
 	tasks, err := uq1.Dequeue("topic1", 1, 10)
@@ -646,6 +653,7 @@ func TestRemoteDrainNack(t *testing.T) {
 	t.Log("finished shutting down partition 1")
 
 	if time.Since(s) > time.Second*10 || time.Since(s) < time.Second*6 {
+		gm2.Shutdown(false)
 		t.Fatalf("took %s", time.Since(s))
 	}
 	uq1.Shutdown()
@@ -653,10 +661,12 @@ func TestRemoteDrainNack(t *testing.T) {
 	// Check partition 2
 	tasks, err = uq2.Dequeue("topic1", 1, 10)
 	if err != nil {
+		gm2.Shutdown(false)
 		t.Fatal(err)
 	}
 
 	if len(tasks) == 0 || tasks[0].Task.Payload != "hey this is a payload" {
+		gm2.Shutdown(false)
 		t.Fatal("did not get the task from the second partition")
 	}
 	t.Logf("%+v", tasks[0])
