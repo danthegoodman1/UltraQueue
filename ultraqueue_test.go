@@ -187,7 +187,7 @@ func TestAck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = uq.Enqueue([]string{"topic1", "topic2"}, "hey this is a payload", 3, 0)
+	err = uq.Enqueue([]string{"topic1", "topic2"}, "ackpayload", 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,4 +348,29 @@ func TestDrain(t *testing.T) {
 		t.Fatalf("did not get 2 tasks, got %d", gotTasks)
 	}
 	t.Log("done")
+}
+
+// Only works for persistent TaskDB, run TestAck before so there is data
+func TestAttach(t *testing.T) {
+	uq, err := NewUltraQueue("testpart", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	it := uq.TaskDB.Attach()
+	tasks, err := it.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) == 0 {
+		t.Fatal("no tasks founds")
+	}
+
+	for _, task := range tasks {
+		payload, err := uq.TaskDB.GetPayload(task.Topic, task.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Log(payload)
+	}
 }

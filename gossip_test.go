@@ -26,7 +26,7 @@ func TestGossipDualNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gm, err := NewGossipManager("testpart", "0.0.0.0", uq, 9900, "127.0.0.1", "9990", []string{})
+	gm, err := NewGossipManager("testpart", "0.0.0.0", uq, 9800, "127.0.0.1", "9990", []string{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestGossipDualNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gm2, err := NewGossipManager("testpart2", "0.0.0.0", uq2, 9901, "127.0.0.1", "9991", []string{"localhost:9900"})
+	gm2, err := NewGossipManager("testpart2", "0.0.0.0", uq2, 9801, "127.0.0.1", "9991", []string{"localhost:9900"})
 	if err != nil {
 		t.Fatal(err)
 	}
