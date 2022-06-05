@@ -166,6 +166,7 @@ func (gm *GossipManager) pollTopicLen(t *time.Ticker) {
 }
 
 func (gm *GossipManager) Shutdown(drain bool) {
+	defer gm.MemberList.Shutdown()
 	log.Info().Str("partition", gm.UltraQ.Partition).Msg("Shutting down gossip manager...")
 	returnChan := make(chan struct{}, 1)
 	gm.topicPollStopChan <- returnChan
@@ -183,7 +184,6 @@ func (gm *GossipManager) Shutdown(drain bool) {
 	log.Debug().Str("partition", gm.UltraQ.Partition).Msg("Leaving cluster...")
 	gm.MemberList.Leave(time.Second * 10)
 	log.Debug().Str("partition", gm.UltraQ.Partition).Msg("Shutting down...")
-	gm.MemberList.Shutdown()
 	<-returnChan
 	log.Info().Str("partition", gm.UltraQ.Partition).Msg("Shut down gossip manager")
 }
