@@ -20,13 +20,13 @@ func NewBadgerTaskDB(partition string) (*BadgerTaskDB, error) {
 	opts.Logger = nil
 	pdb, err := badger.Open(opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open badger DB1: %w", err)
+		return nil, fmt.Errorf("failed to open badger payload DB: %w", err)
 	}
 	opts = badger.DefaultOptions(fmt.Sprintf("./badger_states_%s", partition))
 	opts.Logger = nil
 	sdb, err := badger.Open(opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open badger DB2: %w", err)
+		return nil, fmt.Errorf("failed to open badger state DB: %w", err)
 	}
 	return &BadgerTaskDB{
 		payloadDB: pdb,
