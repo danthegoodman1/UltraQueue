@@ -3,6 +3,7 @@ module github.com/danthegoodman1/UltraQueue
 go 1.18
 
 require (
+	github.com/cockroachdb/pebble v0.0.0-20220603185428-ad44a62e4d04
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-playground/validator/v10 v10.11.0
 	github.com/google/btree v1.0.1
@@ -23,7 +24,6 @@ require (
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cockroachdb/errors v1.8.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f // indirect
-	github.com/cockroachdb/pebble v0.0.0-20220603185428-ad44a62e4d04 // indirect
 	github.com/cockroachdb/redact v1.0.8 // indirect
 	github.com/cockroachdb/sentry-go v0.6.1-cockroachdb.2 // indirect
 	github.com/dgraph-io/badger/v3 v3.2103.2 // indirect
