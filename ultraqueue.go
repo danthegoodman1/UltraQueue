@@ -414,23 +414,18 @@ func (uq *UltraQueue) ack(inTreeTaskID string) (topic, taskID string, deleted bo
 	uq.inFlightTreeMu.Lock()
 	defer uq.inFlightTreeMu.Unlock()
 
-	// shitty google btree needs the entire object for the delete, so we have to go FIND IT FIRST
-	var foundTask *InTreeTask
-	uq.inFlightTree.AscendGreaterOrEqual(&InTreeTask{
+	// Use a fake item to delete from the tree
+	deletedTask := uq.inFlightTree.Delete(&InTreeTask{
 		TreeID: inTreeTaskID,
-	}, func(i btree.Item) bool {
-		itt, _ := i.(*InTreeTask)
-		if itt.TreeID == inTreeTaskID {
-			foundTask = itt
-		}
-		// If we didn't find it as the first one, then we don't have it
-		return false
 	})
-	if foundTask != nil {
+	if deletedTask != nil {
 		// Delete from inflight tree
-		uq.inFlightTree.Delete(foundTask)
-
-		return foundTask.Task.Topic, foundTask.Task.ID, true
+		deletedTask, ok := deletedTask.(*InTreeTask)
+		if !ok {
+			log.Error().Str("inTreeTaskID", inTreeTaskID).Msg("failed to cast deleted task")
+			return "", "", false
+		}
+		return deletedTask.Task.Topic, deletedTask.Task.ID, true
 	} else {
 		return "", "", false
 	}
@@ -440,20 +435,16 @@ func (uq *UltraQueue) nack(inTreeTaskID string, delaySeconds int32) bool {
 	uq.inFlightTreeMu.Lock()
 	defer uq.inFlightTreeMu.Unlock()
 
-	// shitty google btree needs the entire object for the delete, so we have to go FIND IT FIRST
-	var foundTask *InTreeTask
-	uq.inFlightTree.AscendGreaterOrEqual(&InTreeTask{
+	// Use a fake item to delete from the tree
+	deletedTask := uq.inFlightTree.Delete(&InTreeTask{
 		TreeID: inTreeTaskID,
-	}, func(i btree.Item) bool {
-		itt, _ := i.(*InTreeTask)
-		if itt.TreeID == inTreeTaskID {
-			foundTask = itt
-		}
-		// If we didn't find it as the first one, then we don't have it
-		return false
 	})
-	if foundTask != nil {
-		uq.inFlightTree.Delete(foundTask)
+	if deletedTask != nil {
+		deletedTask, ok := deletedTask.(*InTreeTask)
+		if !ok {
+			log.Error().Str("inTreeTaskID", inTreeTaskID).Msg("failed to cast deleted task")
+			return false
+		}
 		if delaySeconds > 0 {
 			// // Update time id
 			// foundTask.TreeID = foundTask.Task.genTimeTreeID(time.Now().Add(time.Second * time.Duration(delaySeconds)))
@@ -462,7 +453,7 @@ func (uq *UltraQueue) nack(inTreeTaskID string, delaySeconds int32) bool {
 			// defer uq.delayTreeMu.Unlock()
 			// uq.delayTree.ReplaceOrInsert(foundTask)
 
-			uq.enqueueDelayedTask(foundTask.Task, delaySeconds)
+			uq.enqueueDelayedTask(deletedTask.Task, delaySeconds)
 
 		} else {
 			// // Put in topic
@@ -473,7 +464,7 @@ func (uq *UltraQueue) nack(inTreeTaskID string, delaySeconds int32) bool {
 			// }
 			// topic.Enqueue(NewInTreeTask(foundTask.Task.genPriorityTreeID(), foundTask.Task))
 
-			uq.enqueueTask(foundTask.Task)
+			uq.enqueueTask(deletedTask.Task)
 
 		}
 		return true
