@@ -206,10 +206,7 @@ func (di *KVDrainIterator) Next() ([]*DrainTask, error) {
 			if !di.tdb.closed {
 				// Drop everything and close
 				fmt.Println("flushing")
-				di.tdb.payloadDB.Flush()
-				di.tdb.stateDB.Flush()
-				di.tdb.payloadDB.Close()
-				di.tdb.stateDB.Close()
+				di.tdb.Close()
 				// Delete the folders
 				err := os.RemoveAll(di.tdb.payloadPath)
 				if err != nil {
@@ -335,6 +332,8 @@ func (tdb *KVTaskDB) attachLoad(ai *KVAttachIterator) {
 		}
 	}
 
+	it.Close()
+
 	if len(buf) > 0 {
 		// We have at least one more item left
 		// Dump into channel
@@ -369,4 +368,25 @@ func (tdb *KVTaskDB) bytesToTaskState(b []byte) (*TaskDBTaskState, error) {
 		return nil, fmt.Errorf("error unmarshalling taskdb task state from badger bytes: %w", err)
 	}
 	return state, nil
+}
+
+func (tdb *KVTaskDB) Close() error {
+	log.Debug().Msg("closing KVTaskDB")
+	err := tdb.payloadDB.Flush()
+	if err != nil {
+		log.Error().Err(err).Msg("error flushing payloadDB")
+	}
+	err = tdb.stateDB.Flush()
+	if err != nil {
+		log.Error().Err(err).Msg("error flushing stateDB")
+	}
+	err = tdb.payloadDB.Close()
+	if err != nil {
+		log.Error().Err(err).Msg("error closing payloadDB")
+	}
+	err = tdb.stateDB.Close()
+	if err != nil {
+		log.Error().Err(err).Msg("error closing stateDB")
+	}
+	return nil
 }

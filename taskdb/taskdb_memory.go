@@ -188,3 +188,7 @@ func (di *MemoryDrainIterator) Next() ([]*DrainTask, error) {
 func (MemoryTaskDB) getMapID(topicName, taskID string) string {
 	return fmt.Sprintf("%s_%s", topicName, taskID)
 }
+
+func (MemoryTaskDB) Close() error {
+	return nil
+}

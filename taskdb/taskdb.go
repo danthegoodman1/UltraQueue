@@ -25,8 +25,12 @@ type TaskDB interface {
 	// Deletes all task states for a topic, and removes the topic from the task table. If no more tasks exist then the task will be removed from the task table
 	Delete(topicName, taskID string) WriteResult
 
-	// Returns an iterator that will read all payloads from the DB, so they can be drained into other partitions
+	// Returns an iterator that will read all payloads from the DB, so they can be drained into other partitions.
+	// Automatically closes the TaskDB
 	Drain() DrainIterator
+
+	// Closes the TaskDB without draining
+	Close() error
 }
 
 type TaskDBTaskState struct {

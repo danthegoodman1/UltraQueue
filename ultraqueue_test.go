@@ -243,6 +243,10 @@ func TestAck(t *testing.T) {
 	if len(tasks) != 1 {
 		t.Fatal("Task did not timeout for inflight")
 	}
+	err = uq.TaskDB.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 	uq.Shutdown()
 }
 
@@ -350,8 +354,9 @@ func TestDrain(t *testing.T) {
 	t.Log("done")
 }
 
-// Only works for persistent TaskDB, run TestAck before so there is data
+// Only works for a persistent TaskDB, run TestAck before so there is data
 func TestAttach(t *testing.T) {
+	TestAck(t)
 	uq, err := NewUltraQueue("testpart", 100)
 	if err != nil {
 		t.Fatal(err)
